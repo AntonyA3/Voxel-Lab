@@ -4,9 +4,9 @@ SRCDIR = ./src/
 DEPSDIR= ./include/
 _OBJDIR= obj/
 OBJDIR = ./objects/
-LIBS = -lGL -lGLU -lglfw -lX11 -lXxf86vm -lXrandr -lpthread -lXi -lm 
-GLLIBS =  -lGL -lGLU
-main.o: $(SRCDIR)main.c
+IMGUIDIR=./imgui
+LIBS = -lGL -lGLU -lGLEW -lglut -lglfw -lX11 -lXxf86vm -lXrandr -lpthread -lXi -lm
+main.o: $(SRCDIR)main.c libs/cimgui.so
 	$(CC) $< -c $(CFLAGS)
 
 camera.o: $(SRCDIR)camera.c
@@ -16,7 +16,7 @@ grid.o: $(SRCDIR)grid.c
 	$(CC) $< -c $(CFLAGS)
 
 
-voxellab: main.o camera.o grid.o
+voxellab: main.o camera.o grid.o 
 	$(CC) -o bin/voxellab main.o camera.o grid.o $(CFLAGS) $(LIBS)
 
 clean:
