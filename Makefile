@@ -6,7 +6,7 @@ _OBJDIR= obj/
 OBJDIR = ./objects/
 IMGUIDIR=./imgui
 LIBS = -lGL -lGLU -lGLEW -lglut -lglfw -lX11 -lXxf86vm -lXrandr -lpthread -lXi -lm
-main.o: $(SRCDIR)main.c libs/cimgui.so
+main.o: $(SRCDIR)main.c 
 	$(CC) $< -c $(CFLAGS)
 
 camera.o: $(SRCDIR)camera.c

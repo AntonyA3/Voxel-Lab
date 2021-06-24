@@ -24,6 +24,8 @@
 
 #include "../include/camera.h"
 #include "../include/grid.h"
+/*To create a globals struct*/
+float NEW_Y_SCROLL = 0;
 
 int createShaderProgram(GLuint *program, const char *vertShadeSrc, const char *fragShadeSrc){
     GLint success;
@@ -110,16 +112,29 @@ int loadShaderProgram(GLuint* program,const char* vertexPath,const char* fragmen
     return 0;
 }
 
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
+    NEW_Y_SCROLL = yoffset;        
+}
+
+
 int main(int argc, char const *argv[])
 {    
     struct nk_glfw glfw = {0};
     struct nk_context *ctx;
-    struct nk_font_atlas *atlas;
+    struct nk_font_atlas *atlas;   
+    enum bool{false, true};
+
+    enum mouseLeftEvt{Default_Action,Pan_Camera, Rotate_Camera, Zoom_Camera};
+    int activeMouseLeftEvent = Default_Action;
     GLFWwindow* window; 
     OrbitCamera orbitCamera;
+    int isCameraOrbit = false;
+
     mat4x4 viewMat, projMat;
     GLuint gridShader;
     GridXZ gridY0;
+    float glBackgroundCol[4] = {0.5,0.5,0.5,1.0};
+    double mousePosX, mousePosY;
 
    
     if (!glfwInit()){
@@ -136,6 +151,8 @@ int main(int argc, char const *argv[])
         fprintf(stderr, "Failed to setup GLEW\n");
         exit(1);
     }
+    
+    glfwGetCursorPos(window, &mousePosX, &mousePosY);
 
     ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
     {struct nk_font_atlas *atlas;
@@ -143,9 +160,8 @@ int main(int argc, char const *argv[])
     nk_glfw3_font_stash_end(&glfw);}
 
     {
-    vec3 offset = {0.0,5.0,0.0};
-    initOrbitCamera(&orbitCamera,offset,M_PI_4, M_PI_4,M_PI/3.0,1.0,100.0,1.0,10.0);
-    mat4x4_perspective(projMat, orbitCamera.fov, orbitCamera.aspectRat, orbitCamera.near, orbitCamera.far);
+    vec3 offset = {0.0,0.0,0.0};
+    initOrbitCamera(&orbitCamera,offset,-M_PI_4, -M_PI_4,M_PI/3.0,1.0,100.0,1.0,10.0);
     }
 
     initGridXZ(&gridY0, -16.0,-16.0,1.0,1.0,32,32);
@@ -156,53 +172,147 @@ int main(int argc, char const *argv[])
         printf("Failed to load shaders from these resource files\n");
         return 1;
     }
+    /*
+    GLuint frameBuffer, worldTexture;
+    glGenFramebuffers(1, &frameBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
 
-    
+    glGenTextures(1, &worldTexture);
+    glBindTexture(GL_TEXTURE_2D, worldTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, worldTexture, 0);  
+    if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE){
+        printf("ERROR::FRAMEBUFFER:: Framebuffer is not complete!");
+
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);  */
+    glfwSetScrollCallback(window, scroll_callback);
+
     while (!glfwWindowShouldClose(window)){
         float ratio;
         int width, height;
-        quat camYaw, camPitch, camRot;
-        vec3 up = {0,1,0};
-        vec3 right = {1,0,0}; 
-
+        double nMousePosX, nMousePosY;
+        float dMousePosX, dMousePosY;
+        
         glfwGetFramebufferSize(window, &width, &height);
         ratio = width / (float) height;
-        
+        glViewport(0, 0, width, height);
+
+
+        glfwPollEvents();    
+        int leftBtnState = glfwGetMouseButton(window,GLFW_MOUSE_BUTTON_LEFT);
+        int rightBtnState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT);
+        glfwGetCursorPos(window, &nMousePosX, &nMousePosY);
+        dMousePosX = (float) (nMousePosX - mousePosX);
+        dMousePosY = (float) (nMousePosY - mousePosY);
+        mousePosX = nMousePosX;
+        mousePosY = nMousePosY;
+        orbitCamera.distance += NEW_Y_SCROLL;
+        if (leftBtnState == GLFW_PRESS)
+        {
+            switch (activeMouseLeftEvent)
+            {
+            case Default_Action:
+                break;
+            case Pan_Camera:
+                panCamera(&orbitCamera, dMousePosX, dMousePosY);
+                break;
+            case Rotate_Camera:
+                cameraOrbitEvent(&orbitCamera, &isCameraOrbit, leftBtnState ,dMousePosX, dMousePosY);
+
+                break;
+            case Zoom_Camera:
+                orbitCamera.distance += dMousePosY;
+                break;
+            
+            default:
+                break;
+            }
+            
+        }
+        if(leftBtnState == GLFW_RELEASE){
+            activeMouseLeftEvent = Default_Action;
+        }
+        if(activeMouseLeftEvent != Rotate_Camera){
+            cameraOrbitEvent(&orbitCamera, &isCameraOrbit, rightBtnState ,dMousePosX, dMousePosY);
+        }
+
+
         nk_glfw3_new_frame(&glfw);
         
         if (nk_begin(ctx, "Demo", nk_rect(50, 50, 230, 250),
             NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
             NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE ))
         {
-            if (nk_button_label(ctx, "button")){
-                fprintf(stdout, "button pressed\n");
+            nk_layout_row_static(ctx, 30, 80, 1);
+            orbitCamera.fov = nk_slide_float(ctx,0.01, orbitCamera.fov, M_PI,0.01);
+            orbitCamera.far = nk_slide_float(ctx, orbitCamera.near, orbitCamera.far, 200, 0.01);
+            getProjMat(&orbitCamera, &projMat);
+
+            nk_layout_row_static(ctx, 32, 32, 1);
+            nk_style_push_float(ctx, &ctx->style.button.rounding, 16);
+
+            if(nk_button_symbol(ctx, NK_SYMBOL_NONE)){                
+                activeMouseLeftEvent = Zoom_Camera;
             }
+            
+            if(nk_button_symbol(ctx, NK_SYMBOL_NONE)){                
+                activeMouseLeftEvent = Pan_Camera;
+            }
+
+            if(nk_button_symbol(ctx, NK_SYMBOL_NONE)){                
+                activeMouseLeftEvent = Rotate_Camera;
+            }
+           
+            nk_style_pop_float(ctx);
+            nk_button_label(ctx, "button");
+
         }
         nk_end(ctx);
+
+        if (nk_begin(ctx, "Bacground Color Picker", nk_rect(100, 50, 230, 250),
+            NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
+            NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE ))
+        {
+            
+            struct nk_colorf bgcol;
+            memcpy(&bgcol,glBackgroundCol, sizeof(struct nk_colorf));
+            nk_layout_row_static(ctx, 230, 250, 1);
+            bgcol = nk_color_picker(ctx,bgcol,NK_RGBA);
+            memcpy(glBackgroundCol,&bgcol,sizeof(struct nk_colorf));
+            
         
-       
+        }
+        nk_end(ctx);
+
+        if (nk_begin(ctx, "Grid Color Picker", nk_rect(100, 50, 230, 250),
+            NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
+            NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE ))
+        {
+            //nk_image_id()
+            //nk_draw_image()
+            //float gridColor[4] = {gridY0.r,gridY0.g, gridY0.b, gridY0.a};
+            struct nk_colorf bgcol;
+            memcpy(&bgcol,&gridY0.r, sizeof(struct nk_colorf));
+            nk_layout_row_static(ctx, 230, 250, 1);
+            bgcol = nk_color_picker(ctx,bgcol,NK_RGBA);
+            memcpy(&gridY0.r,&bgcol,sizeof(struct nk_colorf));
+            editGridXZModel(&gridY0);
+        
+        }
+        nk_end(ctx);
+
         if(orbitCamera.aspectRat != ratio){
             orbitCamera.aspectRat = ratio;
-            mat4x4_perspective(projMat, orbitCamera.fov, orbitCamera.aspectRat, orbitCamera.near, orbitCamera.far);
         }
 
-        {mat4x4 distMat, transMat, rotMat;
-        quat_rotate(camYaw, orbitCamera.yaw, up);
-        quat_rotate(camPitch, orbitCamera.pitch, right);
-        quat_mul(camRot,camPitch, camYaw);
-        mat4x4_translate(distMat, orbitCamera.distance, 0.0, 0.0);
-        mat4x4_translate(transMat, -orbitCamera.offset[0], -orbitCamera.offset[1], -orbitCamera.offset[2]);
-        
-        
-        mat4x4_from_quat(rotMat, camRot);
-        mat4x4_mul(viewMat, rotMat, distMat);
-        mat4x4_mul(viewMat, transMat, viewMat);
-        }
+        getViewMat(&orbitCamera, &viewMat);
+        getProjMat(&orbitCamera, &projMat);
 
-        glViewport(0, 0, width, height);
-        glClearColor(0.5, 0.5, 0.5, 0.5);
+        glClearColor(glBackgroundCol[0], glBackgroundCol[1], glBackgroundCol[2], glBackgroundCol[3]);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
         glBindBuffer(GL_ARRAY_BUFFER, gridY0.model.vertsBuffer);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,7* sizeof(float),(void*)0);
         glEnableVertexAttribArray(0);
@@ -217,7 +327,7 @@ int main(int argc, char const *argv[])
         nk_glfw3_render(&glfw, NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
 
         glfwSwapBuffers(window);
-        glfwPollEvents();    
+        NEW_Y_SCROLL = 0;
     }
 
     printf("hello world\n");
