@@ -153,7 +153,6 @@ float degToRad(float deg){
     return deg /180 * M_PI;
 }
 void displayGridProperties(struct nk_context* ctx, int* visible, GridColor* gridColor){
-    struct nk_colorf uiGridColor = {0xFF, 0xFF,0xFF,0xFF};
     int gridVisible = !*visible;
     nk_layout_row_static(ctx, 32, 64, 1);
     nk_checkbox_label(ctx, "Visible", &gridVisible);
@@ -213,8 +212,39 @@ void updateFrameTexture(GLuint* texture, int width, int height){
 
 
 }
+void mouseToViewportCoordinates(float* x, float* y, viewport viewport, Mouse mouse){
+    float halfWidth = viewport.width * 0.5;
+    float halfHeight = viewport.height * 0.5;
+    float midViewportX = viewport.x + halfWidth;
+    float midViewportY = viewport.y + halfHeight;
+    *x = (mouse.x - midViewportX) / halfWidth;
+    *y = (mouse.y - midViewportY) / halfHeight * -1;
 
-void addVoxel(){
+}
+void editVoxels(int voxelEditFlag, Mouse mouse, viewport viewport, mat4x4 projMat, mat4x4 viewMat){
+    switch (voxelEditFlag)
+    {
+    case voxel_edit_add_voxel:
+        addVoxel(mouse, viewport, projMat, viewMat);
+        break;
+    case voxel_edit_delete_voxel:
+        break;
+    }
+}
+void addVoxel(Mouse mouse, viewport viewport, mat4x4 projMat, mat4x4 viewMat){
+    float x, y;
+    vec4 direction;
+    mat4x4 mulMat, inverseMat;
+    mouseToViewportCoordinates(&x, &y, viewport,mouse);
+    vec4 clickPoint = {x, y, -1.0, 1.0};
+    
+    mat4x4_mul(mulMat, projMat, viewMat);
+    mat4x4_invert(inverseMat,mulMat);
+    mat4x4_mul_vec4(direction, inverseMat,clickPoint);
+
+    float divizor = -1 /direction[3];
+    vec3 direction3 = {direction[0] * divizor, direction[1] * divizor, direction[2] * divizor};
+    vec3_norm(direction3, direction3);
 
 }
 void deleteVoxel(){
@@ -303,9 +333,8 @@ void mouseUpdate(GLFWwindow* window, Mouse* mouse){
     mouse->x = nMousePosX;
     mouse->y = nMousePosY;
 }
-void mouseToViewportCoordinates(viewport* viewport){
 
-}
+
 int main(int argc, char const *argv[])
 {    
     struct nk_glfw glfw = {0};
@@ -390,9 +419,7 @@ int main(int argc, char const *argv[])
 
     glfwSetScrollCallback(window, scroll_callback);
 
-    while (!glfwWindowShouldClose(window)){
-        float viewportRatio;
-        
+    while (!glfwWindowShouldClose(window)){        
         glfwGetFramebufferSize(window, &mainViewport.width, &mainViewport.height);
         mainViewport.ratio = mainViewport.width / (float) mainViewport.height;
         renderViewport.x = navPanel.width + propPanel.width;
@@ -400,8 +427,12 @@ int main(int argc, char const *argv[])
         renderViewport.width =  mainViewport.width - navPanel.width - propPanel.width;
         renderViewport.height = mainViewport.height - navPanel.height;
         renderViewport.ratio = renderViewport.width / (float) renderViewport.height;
+        orbitCamera.aspectRat = renderViewport.ratio;
+        getViewMat(&orbitCamera, &viewMat);
+        getProjMat(&orbitCamera, &projMat);
+
         updateFrameTexture(&worldTexture, renderViewport.width, renderViewport.height);
-     
+
         glfwPollEvents();    
         mouseUpdate(window, &mouse);
         orbitCamera.distance += NEW_Y_SCROLL;
@@ -410,6 +441,7 @@ int main(int argc, char const *argv[])
             switch (primaryAction)
             {
             case Default_Action:
+                editVoxels(voxelEditFlag, mouse, renderViewport, projMat, viewMat);
                 break;
             case Pan_Camera:
                 panCamera(&orbitCamera, mouse.deltaX, mouse.deltaY);
@@ -533,9 +565,7 @@ int main(int argc, char const *argv[])
         nk_style_pop_color(ctx);
         nk_style_pop_style_item(ctx);
 
-        orbitCamera.aspectRat = renderViewport.ratio;
-        getViewMat(&orbitCamera, &viewMat);
-        getProjMat(&orbitCamera, &projMat);
+        
         renderScene(scene, gridY0.visible, frameBuffer,renderViewport.width, renderViewport.height, gridY0, gridShader, &projMat, &viewMat);
         nk_glfw3_render(&glfw, NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
         glfwSwapBuffers(window);
