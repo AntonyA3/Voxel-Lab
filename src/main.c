@@ -23,6 +23,7 @@
 #include "../include/mouse_input.h"
 #include "../include/camera.h"
 #include "../include/grid.h"
+#include "../include/voxel.h"
 float NEW_Y_SCROLL = 0;
 
 
@@ -221,17 +222,28 @@ void mouseToViewportCoordinates(float* x, float* y, viewport viewport, Mouse mou
     *y = (mouse.y - midViewportY) / halfHeight * -1;
 
 }
-void editVoxels(int voxelEditFlag, Mouse mouse, viewport viewport, mat4x4 projMat, mat4x4 viewMat){
+void editVoxels(int voxelEditFlag, Mouse mouse, viewport viewport, mat4x4 projMat, mat4x4 viewMat, vec3 camPos){
     switch (voxelEditFlag)
     {
     case voxel_edit_add_voxel:
-        addVoxel(mouse, viewport, projMat, viewMat);
+        addVoxel(mouse, viewport, projMat, viewMat, camPos);
         break;
     case voxel_edit_delete_voxel:
         break;
     }
 }
-void addVoxel(Mouse mouse, viewport viewport, mat4x4 projMat, mat4x4 viewMat){
+
+void addVoxelFromRay(vec3 start, vec3 direction){
+    if((start[1] > 0 && direction[1] < 0) || (start[1] < 0 && direction[1] > 0)){
+        float d = (0 - start[1]) / direction[1];
+        int x = (int) (start[0] + direction[0] * d);
+        int y = 0;
+        int z = (int) (start[2] + direction[2] * d);
+        printf("%d, %d, %d\n",x,y,z);
+    }
+
+}
+void addVoxel(Mouse mouse, viewport viewport, mat4x4 projMat, mat4x4 viewMat, vec3 camPos){
     float x, y;
     vec4 direction;
     mat4x4 mulMat, inverseMat;
@@ -245,8 +257,10 @@ void addVoxel(Mouse mouse, viewport viewport, mat4x4 projMat, mat4x4 viewMat){
     float divizor = -1 /direction[3];
     vec3 direction3 = {direction[0] * divizor, direction[1] * divizor, direction[2] * divizor};
     vec3_norm(direction3, direction3);
-
+    addVoxelFromRay(camPos, direction3);
 }
+
+
 void deleteVoxel(){
 
 }
@@ -351,7 +365,7 @@ int main(int argc, char const *argv[])
     Scene scene;
     viewport mainViewport, renderViewport;
     Panel menuPanel, navPanel, propPanel, renderPanel;
-
+    VoxelStore voxelStore;
     if (!glfwInit()){
         return -1;
     }
@@ -436,12 +450,15 @@ int main(int argc, char const *argv[])
         glfwPollEvents();    
         mouseUpdate(window, &mouse);
         orbitCamera.distance += NEW_Y_SCROLL;
+        vec3 camPos;
+
         if (mouse.leftState == GLFW_PRESS)
         {
             switch (primaryAction)
             {
             case Default_Action:
-                editVoxels(voxelEditFlag, mouse, renderViewport, projMat, viewMat);
+                orbitCameraPosition(orbitCamera, camPos);
+                editVoxels(voxelEditFlag, mouse, renderViewport, projMat, viewMat,camPos);
                 break;
             case Pan_Camera:
                 panCamera(&orbitCamera, mouse.deltaX, mouse.deltaY);
