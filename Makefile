@@ -10,23 +10,17 @@ LIBS = -lGL -lGLU -lGLEW -lglut -lglfw -lX11 -lXxf86vm -lXrandr -lpthread -lXi -
 main.o: $(SRCDIR)main.c 
 	$(CC) $< -c $(CFLAGS)
 
-camera.o: $(SRCDIR)camera.c
-	$(CC) $< -c $(CFLAGS)
-
-grid.o: $(SRCDIR)grid.c
-	$(CC) $< -c $(CFLAGS)
-
-voxel.o: $(SRCDIR)voxel.c
+%.o: $(SRCDIR)%.c
 	$(CC) $< -c $(CFLAGS)
 
 voxel_test.o: $(TESTDIR)voxel_test.c
 	$(CC) $< -c $(CFLAGS)
 
-voxellab: main.o camera.o grid.o voxel.o
-	$(CC) -o bin/voxellab main.o camera.o grid.o voxel.o $(CFLAGS) $(LIBS)
+voxellab: main.o camera.o grid.o voxel.o mouse.o
+	$(CC) -o bin/voxellab main.o camera.o grid.o voxel.o mouse.o $(CFLAGS) $(LIBS)
 
 buildtest: voxel_test.o voxel.o
-	$(CC)  -o bin/test voxel_test.o voxel.o $(CFLAGS) $(LIBS) -ggdb
+	$(CC)  -o bin/test voxel_test.o voxel.o mouse.o $(CFLAGS) $(LIBS) -ggdb
 
 runtest:
 	./bin/test

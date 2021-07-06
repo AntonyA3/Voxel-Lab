@@ -24,6 +24,7 @@
 #include "../include/camera.h"
 #include "../include/grid.h"
 #include "../include/voxel.h"
+#include "../include/mouse.h"
 float NEW_Y_SCROLL = 0;
 
 
@@ -36,11 +37,7 @@ typedef struct Viewport
 typedef struct Panel{
     int x, y, width, height;
 }Panel;
-typedef struct Mouse
-{
-    float x, y, deltaX, deltaY;
-    int leftState, rightState;
-}Mouse;
+
 
 typedef struct VoxelLab{
     int primaryAction, voxelEditFlag, navSelected;
@@ -58,20 +55,10 @@ typedef struct VoxelLab{
 }VoxelLab;
 
 
-enum mouseLeftEvt{Default_Action,Pan_Camera, Rotate_Camera, Zoom_Camera};
+enum mouseLeftEvt{Default_Action,Pan_Camera, Rotate_Camera, Zoom_Camera, Voxel_Manipulate};
 enum voxel_edit{voxel_edit_add_voxel, voxel_edit_delete_voxel};
 enum nav_select{nav_select_voxel_edit, nav_select_camera_props, nav_select_editor_props, nav_select_grid_props};
 
-const float quad[6][4] = {
-    {-1.0,-1.0,0.0,0.0},
-    {-1.0,1.0,0.0,1.0},
-    {1.0,1.0,1.0,1.0},
-    
-    {-1.0,-1.0,0.0,0.0},
-    {1.0,1.0,1.0,1.0},
-    {1.0,-1.0,1.0,0.0}
-};
-/*Shader setup*/
 int createShaderProgram(GLuint *program, const char *vertShadeSrc, const char *fragShadeSrc){
     GLint success;
     char buffer[1000];
@@ -228,15 +215,7 @@ void updateFrameDepthTexture(GLuint *texture, int width, int height){
     );
 }
 
-void mouseToViewportCoordinates(float* x, float* y, Viewport viewport, Mouse mouse){
-    float halfWidth = viewport.width * 0.5;
-    float halfHeight = viewport.height * 0.5;
-    float midViewportX = viewport.x + halfWidth;
-    float midViewportY = viewport.y + halfHeight;
-    *x = (mouse.x - midViewportX) / halfWidth;
-    *y = (mouse.y - midViewportY) / halfHeight * -1;
 
-}
 
 void infoMenu(struct  nk_context* ctx)
 {
@@ -291,8 +270,9 @@ void mouseInit(GLFWwindow* window, Mouse* mouse){
 
 void mouseUpdate(GLFWwindow* window, Mouse* mouse){
     double nMousePosX, nMousePosY;
-    mouse->leftState = glfwGetMouseButton(window,GLFW_MOUSE_BUTTON_LEFT);
-    mouse->rightState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT);
+
+    mouse->button[mouse_button_left] = glfwGetMouseButton(window,GLFW_MOUSE_BUTTON_LEFT);
+    mouse->button[mouse_button_right] = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT);
     glfwGetCursorPos(window, &nMousePosX, &nMousePosY);
     mouse->deltaX = (float) (nMousePosX - mouse->x);
     mouse->deltaY = (float) (nMousePosY - mouse->y);
@@ -306,6 +286,75 @@ void initVoxelLab(VoxelLab *voxelLab){
     voxelLab->navSelected = nav_select_editor_props;
     voxelLab->mainViewport.x = 0;
     voxelLab->mainViewport.y = 0;
+
+}
+
+int orbitCameraStateFromMouseButton(int mouseButton){
+   return orbit_cam_state_is_orbit * (
+            mouseButton == mouse_button_state_pressed ||
+            mouseButton == mouse_button_state_down
+        ) + orbit_cam_state_not_orbit *(
+            mouseButton == mouse_button_state_released ||
+            mouseButton == mouse_button_state_up
+        );
+
+}
+
+void voxelManipulation(VoxelLab* voxelLab){
+    float x, y;
+    mat4x4 viewMat, projMat, viewProjMat, inverseMat;
+    vec4 target4;
+    vec3 target, camPos, dV, direction;
+    switch (voxelLab->voxelEditFlag)
+    {
+    case voxel_edit_add_voxel:
+        if(voxelLab->mouse.button[mouse_button_left] == mouse_button_state_pressed){
+            x = (voxelLab->mouse.x - voxelLab->renderViewport.x) / voxelLab->renderViewport.width * 2;
+            x -= 1;
+            y = (voxelLab->mouse.y - voxelLab->renderViewport.y) / voxelLab->renderViewport.height * -2;
+            y += 1;
+            vec4 clickVector = {x,y,-1.0,1.0};
+            getViewMat(&voxelLab->orbitCam, viewMat);
+            getProjMat(&voxelLab->orbitCam, projMat);
+            mat4x4_mul(viewProjMat, projMat, viewMat);
+            mat4x4_invert(inverseMat, viewProjMat);
+
+            mat4x4_mul_vec4(target4, inverseMat, clickVector);
+            float div = 1 / target4[3];
+            target[0] = target4[0];
+            target[1] = target4[1];
+            target[2] = target4[2];
+            orbitCameraPosition(voxelLab->orbitCam, camPos);
+            vec3_sub(dV, target, camPos);
+            vec3_norm(direction, dV);
+            {
+                int x, y, z;
+                int voxelCount = countVoxelsInVoxelStore(&voxelLab->voxelStore);
+                float d = -camPos[1] / direction[1];
+                x = (camPos[0] + direction[0] * d);
+                y = 0;
+                z = (camPos[2] + direction[2] * d);
+
+                addVoxelToVoxelStore(&voxelLab->voxelStore, x, y, z);
+                printf("x %d, y %d, z %d\n",x,y,z);
+                getVoxelModelFromVoxelStore(&voxelLab->voxelStore,&voxelLab->voxelModelVerts, &voxelLab->voxelModelIndicies);
+                
+                glBindBuffer(GL_ARRAY_BUFFER, voxelLab->voxelModelVertexBuffer);
+                glBufferData(GL_ARRAY_BUFFER, 8 * sizeof(VoxelVertex) * voxelCount, voxelLab->voxelModelVerts,GL_DYNAMIC_DRAW);
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelLab->voxelModelIndexBuffer);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(unsigned int) * voxelCount, voxelLab->voxelModelIndicies,GL_DYNAMIC_DRAW);
+
+            }              
+            
+        }
+
+       
+        break;
+    
+    case voxel_edit_delete_voxel:
+        break;
+    }
 
 }
 
@@ -335,9 +384,14 @@ int main(int argc, char const *argv[])
         exit(1);
     }    
     
-    initVoxelLab(&voxelLab);    
+    initVoxelLab(&voxelLab); 
+    {
+        double x, y;
+        glfwGetCursorPos(window, &x, &y);
+        initMouse(&voxelLab.mouse,(float)x, (float)y);
+    }
+    
     glfwGetWindowSize(window, &voxelLab.mainViewport.width, &voxelLab.mainViewport.height);
-    mouseInit(window, &voxelLab.mouse);
 
     ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
     {
@@ -345,13 +399,13 @@ int main(int argc, char const *argv[])
         nk_glfw3_font_stash_begin(&glfw, &atlas);
         nk_glfw3_font_stash_end(&glfw);
     }
+    
     {
-    vec3 offset = {0.0,0.0,0.0};
-    initOrbitCamera(&voxelLab.orbitCam,offset,-M_PI_4, -M_PI_4,M_PI/3.0,1.0,10000.0,1.0,10.0);
+        vec3 offset = {0.0,0.0,0.0};
+        initOrbitCamera(&voxelLab.orbitCam,offset,-M_PI_4, -M_PI_4,M_PI/3.0,1.0,100.0,1.0,10.0);
     }
-
+    initVoxelStore(&voxelLab.voxelStore);
     initGridXZ(&voxelLab.gridY0, -16.0,-16.0,1.0,1.0,32,32, initGridColor(1.0,1.0,1.0,1.0), grid_visible_true);
-    updateGridXZModel(&voxelLab.gridY0);
     
     if(loadShaderProgram(&voxelLab.gridShader, "res/shaders/grid_vertex.glsl","res/shaders/grid_fragment.glsl")){
         printf("nessesary shader failed to load\n");
@@ -381,7 +435,11 @@ int main(int argc, char const *argv[])
     menuPanel.x = 0;
     menuPanel.y = 0;
     menuPanel.width = voxelLab.mainViewport.width;
-    menuPanel.height = 32;
+    menuPanel.height = 48;
+    
+    navPanel.x = 0;
+    navPanel.y = menuPanel.height;
+    navPanel.width = 64;
     
     propPanel.x = 64;
     propPanel.width = 144;
@@ -389,79 +447,77 @@ int main(int argc, char const *argv[])
     propPanel.height = voxelLab.mainViewport.height - menuPanel.height;
 
     glfwSetScrollCallback(window, scroll_callback);
-    int count = 0;
-    for(int i = 0; i < 128; i++){
-        for(int j = 0; j < 128; j++){
-            for(int k = 0; k < 128; k++){
-                addVoxelToVoxelStore(&voxelLab.voxelStore, i, j, k);
-
-            }    
-        }                 
-
-    }
-    compressVoxelStore(&voxelLab.voxelStore);
-
-    getVoxelModelFromVoxelStore(&voxelLab.voxelStore, &voxelLab.voxelModelVerts, &voxelLab.voxelModelIndicies);  
-    
-    int voxelCount = countVoxelsInVoxelStore(&voxelLab.voxelStore);
-    glGenBuffers(1, &voxelLab.voxelModelVertexBuffer);    
-    glBindBuffer(GL_ARRAY_BUFFER, voxelLab.voxelModelVertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER,sizeof(VoxelVertex) * 8 * voxelCount , voxelLab.voxelModelVerts, GL_DYNAMIC_DRAW);
-    
+       
+    glGenBuffers(1, &voxelLab.voxelModelVertexBuffer);
     glGenBuffers(1, &voxelLab.voxelModelIndexBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelLab.voxelModelIndexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 36 * voxelCount, voxelLab.voxelModelIndicies, GL_DYNAMIC_DRAW);
-    
+
+    voxelLab.primaryAction = Voxel_Manipulate;
     while (!glfwWindowShouldClose(window)){       
         int *primaryAction = &voxelLab.primaryAction;
-        //int *voxelEditFlag = &voxelLab.voxelEditFlag;
+        int *voxelEditFlag = &voxelLab.voxelEditFlag;
         int *navSelected = &voxelLab.navSelected;
-
-        
         OrbitCamera *orbitCam = &voxelLab.orbitCam;
         Mouse *mouse = &voxelLab.mouse;
-
+        
         glfwGetFramebufferSize(window, &voxelLab.mainViewport.width, &voxelLab.mainViewport.height);
+        
         voxelLab.mainViewport.ratio = voxelLab.mainViewport.width / (float) voxelLab.mainViewport.height;
         voxelLab.renderViewport.x = navPanel.width + propPanel.width;
         voxelLab.renderViewport.y = menuPanel.height;
-        voxelLab.renderViewport.width =  voxelLab.mainViewport.width - navPanel.width - propPanel.width;
-        voxelLab.renderViewport.height = voxelLab.mainViewport.height - navPanel.height;
+        voxelLab.renderViewport.width = voxelLab.mainViewport.width - navPanel.width - propPanel.width;
+        voxelLab.renderViewport.height = voxelLab.mainViewport.height - menuPanel.height;
         voxelLab.renderViewport.ratio = voxelLab.renderViewport.width / (float) voxelLab.renderViewport.height;
         voxelLab.orbitCam.aspectRat = voxelLab.renderViewport.ratio;
+        
         getViewMat(&voxelLab.orbitCam, &voxelLab.viewMat);
         getProjMat(&voxelLab.orbitCam, &voxelLab.projMat);
 
         updateFrameTexture(&worldTexture, voxelLab.renderViewport.width, voxelLab.renderViewport.height);
         updateFrameDepthTexture(&worldDepthTexture, voxelLab.mainViewport.width, voxelLab.mainViewport.height);
+        
         glfwPollEvents();    
 
-        mouseUpdate(window, &voxelLab.mouse);
         voxelLab.orbitCam.distance += NEW_Y_SCROLL;
-
-        mouse->rightState = glfwGetMouseButton(window,1);
-        orbCamera(orbitCam, mouse->deltaX, mouse->deltaY, mouse->rightState);
-        if (voxelLab.mouse.leftState == GLFW_PRESS)
-        {
-            switch (*primaryAction)
-            {
-            case Default_Action:
-                break;
-            case Pan_Camera:
-                panCamera(orbitCam, voxelLab.mouse.deltaX, voxelLab.mouse.deltaY);
-                break;
-            case Rotate_Camera:
-                orbCamera(orbitCam, mouse->deltaX, mouse->deltaY, mouse->leftState);
-                break;
-            case Zoom_Camera:
-                voxelLab.orbitCam.distance += voxelLab.mouse.deltaY;
-                break;            
-            default:
-                break;
-            }    
+        for(int i = 0; i < mouse_button_count; i++){
+            int button = glfwGetMouseButton(window, i);
+            nextMouseButtonState(&mouse->button[i],button == GLFW_PRESS);
         }
-        if(voxelLab.mouse.leftState == GLFW_RELEASE){
-            *primaryAction = Default_Action;
+        {
+            double x, y;
+            glfwGetCursorPos(window, &x, &y);
+            mouse->deltaX = x - mouse->x;
+            mouse->deltaY = y - mouse->y;
+            mouse->x = x;
+            mouse->y = y; 
+        }
+        
+        orbitCam->state = orbitCameraStateFromMouseButton(mouse->button[mouse_button_right]);
+
+        switch (*primaryAction)
+        {
+        case Default_Action:
+            break;
+        case Voxel_Manipulate:
+            voxelManipulation(&voxelLab);
+            break;
+        case Pan_Camera:
+            panCamera(orbitCam, voxelLab.mouse.deltaX, voxelLab.mouse.deltaY);
+            break;
+        case Rotate_Camera:
+            orbitCam->state = orbitCameraStateFromMouseButton(mouse->button[mouse_button_left]);
+            break;
+        case Zoom_Camera:
+            voxelLab.orbitCam.distance += voxelLab.mouse.deltaY;
+            break;            
+        default:
+            break;
+        }    
+
+        orbitCameraDoOrbit(&voxelLab.orbitCam, mouse->deltaX, mouse->deltaY);
+
+
+        if(voxelLab.mouse.button[mouse_button_left] == mouse_button_state_released){
+            *primaryAction = Voxel_Manipulate;
         }
 
         nk_glfw3_new_frame(&glfw);
@@ -478,11 +534,11 @@ int main(int argc, char const *argv[])
             nk_layout_row_push(ctx, 48.0f);
             nk_layout_reset_min_row_height(ctx);
             float containerWidth = nk_widget_width(ctx);
-            if(nk_group_begin(ctx, "Prop Type Container",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){
+            if(nk_group_begin(ctx, "Nav Panel",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){
                 nk_layout_row_static(ctx,containerWidth - 8 ,containerWidth - 8,1);
                 if(nk_select_label(ctx, "Edit",NK_TEXT_ALIGN_CENTERED, 
                     (*navSelected == nav_select_voxel_edit) ? nk_true: nk_false)){
-                        *navSelected = nav_select_voxel_edit;
+                        *navSelected =  nav_select_voxel_edit;
                 }
                 if(nk_select_label(ctx, "Camera",NK_TEXT_ALIGN_CENTERED, 
                     (*navSelected == nav_select_camera_props) ? nk_true: nk_false)){
@@ -502,7 +558,7 @@ int main(int argc, char const *argv[])
             
             nk_layout_row_push(ctx, propPanel.width);
             
-            if(nk_group_begin(ctx, "Property View",NK_WINDOW_BORDER)){
+            if(nk_group_begin(ctx, "Prop Panel",NK_WINDOW_BORDER)){
                 switch (*navSelected){
                     case nav_select_voxel_edit:
                         displayVoxelEditor(ctx, &voxelLab.voxelEditFlag);
@@ -522,7 +578,7 @@ int main(int argc, char const *argv[])
             
 
             nk_layout_row_push(ctx, voxelLab.renderViewport.width);
-            if(nk_group_begin(ctx, "Canvas View",NK_WINDOW_BORDER)){                
+            if(nk_group_begin(ctx, "Render Viewport",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){                
                 nk_layout_row_static(ctx, voxelLab.renderViewport.height, voxelLab.renderViewport.width,1);
                 nk_image_color(ctx, nk_image_id((int)worldTexture),nk_white);
                 nk_group_end(ctx);
