@@ -1,41 +1,20 @@
-#include <stdio.h>
-#include <GL/glew.h>
-#include "linmath.h"
+typedef struct GridVertex{
+    float x, y, z;
+    float r, g, b, a;
+}GridVertex;
 
-typedef struct GridColor{
-    float r,g,b,a;
-}GridColor;
-enum grid_visible{
-    grid_visible_false,
-    grid_visible_true
-};
+typedef struct Grid{
+    float pos[3];
+    float iVec[3];
+    float jVec[3];
+    int iCount;
+    int jCount;
+}Grid;
 
-typedef struct GridVert
-{
-    float x;
-    float y;
-    float z;
-    GridColor color;
-}GridVert;
 
-typedef struct GridModel
-{
-    GridVert* verts;
-    GLuint vertsBuffer;
-    
-}GridModel;
+void set_pos_grid(Grid* grid, float x, float y, float z);
+void set_i_vec_grid(Grid* grid, float x, float y, float z);
+void set_j_vec_grid(Grid* grid, float x, float y, float z);
+int get_vertex_count(Grid grid);
 
-typedef struct GridXZ{
-    float x, z;
-    float xStep, zStep;
-    int xCount, zCount;
-    int visible;
-    GridColor color;
-    GridModel model;
-
-}GridXZ;
-
-void initGridXZ(GridXZ* grid,float x, float z, float xStep, float zStep, int xCount, int zCount, GridColor color, int visibility);
-GridColor initGridColor(float r, float g, float b, float a);
-int updateGridXZModel(GridXZ* grid);
-int gridXZVertexCount(GridXZ grid);
+void init_grid_vertex(GridVertex* gridVertex, float x, float y, float z, float r, float g, float b, float a);

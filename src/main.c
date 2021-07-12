@@ -1,9 +1,9 @@
 #include <stdio.h>
-#define M_PI 3.14159265358979323846
+#include <stdlib.h>
 #include <GL/glew.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-
+#include "linmath.h"
 
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
@@ -15,51 +15,340 @@
 #define NK_IMPLEMENTATION
 #define NK_GLFW_GL3_IMPLEMENTATION
 #define NK_KEYSTATE_BASED_INPUT
-#include "../include/nuklear.h"
-#include "../include/nuklear_glfw_gl3.h"
+
+#include "../nuklear/nuklear.h"
+#include "../nuklear/nuklear_glfw_gl3.h"
 
 #define MAX_VERTEX_BUFFER 512 * 1024
 #define MAX_ELEMENT_BUFFER 128 * 1024
-#include "../include/mouse_input.h"
-#include "../include/camera.h"
+#define VERTEX_PER_CUBE 8
+#define INDICIES_PER_CUBE 36 
+
+#include "../include/color.h"
+#include "../include/cursor.h"
 #include "../include/grid.h"
+#include "../include/orbit_camera.h"
+#include "../include/menu_bar.h"
+#include "../include/vector2.h"
+#include "../include/vector3.h"
+#include "../include/app_viewport.h"
 #include "../include/voxel.h"
-#include "../include/mouse.h"
-float NEW_Y_SCROLL = 0;
+#include "../include/aabb.h"
+#include "../include/ray.h"
 
+enum app_cursor_focus{APP_CURSOR_FOCUS_GUI,APP_CURSOR_FOCUS_RENDER_VIEWPORT, APP_CURSOR_FOCUS_OUTSIDE_WINDOW};
+enum app_mode{APP_MODE_DEBUG, APP_MODE_DEFAULT};
+enum box_sides{BOX_SIDE_LEFT, BOX_SIDE_RIGHT, BOX_SIDE_BOTTOM, BOX_SIDE_TOP, BOX_SIDE_FRONT, BOX_SIDE_BACK};
 
-typedef struct Viewport
-{
-    int x, y, width, height;
-    float ratio;
-}Viewport;
+typedef struct AppGlobals{
+    float yScroll;
+    float xScroll;
+}AppGlobals;
 
-typedef struct Panel{
-    int x, y, width, height;
-}Panel;
+typedef struct VoxelVertex{
+    float x, y, z;
+    float r, g, b, a;
+}VoxelVertex;
 
+void init_voxel_vertex(VoxelVertex* voxelVertex, float x, float y, float z, float r, float g, float b, float a){
+    voxelVertex->x = x;
+    voxelVertex->y = y;
+    voxelVertex->z = z;
+    voxelVertex->r = r;
+    voxelVertex->g = g;
+    voxelVertex->b = b;
+    voxelVertex->a = a;
+}
 
-typedef struct VoxelLab{
-    int primaryAction, voxelEditFlag, navSelected;
-    OrbitCamera orbitCam;
-    mat4x4 viewMat, projMat;
-    GLuint gridShader, voxelShader;
-    GridXZ gridY0;
-    Mouse mouse;
-    Viewport mainViewport, renderViewport;
-    VoxelStore voxelStore;
-    VoxelVertex* voxelModelVerts;
+typedef struct App{
+    Vector2 cursorPos;
+    Vector2 cursorDelta;
+    Vector2 normCursorPos;
+    Ray cursorRay;
+    int cursorRayHit;
+    Vector3 cursorPos3D;
+    OrbitCamera orbitCamera;
+    vec3 orbitCameraPosition;
+    mat4x4 projMat, viewMat, inverseMat;
+    int leftBtn, rightBtn;
+    int cursorButtonState[CURSOR_BUTTON_COUNT];
+    int appCursorFocus;
+    int cameraInsideVoxel;
+    int projMatShouldUpdate, viewMatShouldUpdate, inverseMatShouldUpdate;
+    ColorRGBAf sceneBackColor;
+    AppViewport renderViewport, windowViewport;
+    float menuBarHeight;
+    float menuBarButtonWidth, propertySelectorWidth, propertyWidth, renderPanelWidth;
+    vec2 fileMenuSize;
+    Grid floorGrid;
+    GridVertex* floorGridModel;
+    int floorGridVertexCount;
+    ColorRGBAf floorGridColor;
+    GLuint floorGridVbo, gridShader, voxelShader, frameTexture, frameDepthTexture, frameBuffer,
+    voxelModelVertexBuffer, vertexModelIndexBuffer;
+    Voxel* voxelHead;
+    VoxelVertex* voxelModelVerticies;
     unsigned int* voxelModelIndicies;
-    GLuint voxelModelVertexBuffer, voxelModelIndexBuffer;
-    int voxelModelVertexCount, voxelModelIndexCount;
-}VoxelLab;
+
+    int voxelCount;
+    
+}App;
 
 
-enum mouseLeftEvt{Default_Action,Pan_Camera, Rotate_Camera, Zoom_Camera, Voxel_Manipulate};
-enum voxel_edit{voxel_edit_add_voxel, voxel_edit_delete_voxel};
-enum nav_select{nav_select_voxel_edit, nav_select_camera_props, nav_select_editor_props, nav_select_grid_props};
+void do_cursor_event(App* app){
+    app->cursorButtonState[CURSOR_BUTTON_LEFT] = 
+            cursor_button_next_state(app->cursorButtonState[CURSOR_BUTTON_LEFT], app->leftBtn == GLFW_PRESS
+        );
+    app->cursorButtonState[CURSOR_BUTTON_RIGHT] =
+        cursor_button_next_state(app->cursorButtonState[CURSOR_BUTTON_RIGHT], app->rightBtn == GLFW_PRESS
+    );
+}
 
-int createShaderProgram(GLuint *program, const char *vertShadeSrc, const char *fragShadeSrc){
+void do_orbit_camera_event(App* app){
+    switch (app->orbitCamera.state)
+        {
+        case ORBIT_CAMERA_STATE_IS_ORBITING:
+            if(app->cursorButtonState[CURSOR_BUTTON_RIGHT] == CURSOR_BUTTON_STATE_UP){
+                app->orbitCamera.state = ORBIT_CAMERA_STATE_NOT_ORBITING;
+            }
+            app->orbitCamera.yaw += 0.016 * app->cursorDelta.x;
+            app->orbitCamera.pitch += 0.016 * app->cursorDelta.y;
+            break;
+        case ORBIT_CAMERA_STATE_NOT_ORBITING:
+            if(app->cursorButtonState[CURSOR_BUTTON_RIGHT] == CURSOR_BUTTON_STATE_DOWN){
+                app->orbitCamera.state = ORBIT_CAMERA_STATE_IS_ORBITING;
+
+            }
+            break;
+        }
+}
+
+
+void do_show_cursor_debug(struct nk_context *ctx, App app){
+    if(nk_tree_push(ctx, NK_TREE_TAB, "Cursor", NK_MINIMIZED)){
+        char str[20];
+        nk_layout_row_static(ctx, 32, 64, 2);
+        nk_label(ctx, "x", NK_TEXT_LEFT);
+        sprintf(str, "%f", app.cursorPos.x);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "y", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorPos.y);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "normX", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.normCursorPos.x);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "normY", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.normCursorPos.y);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "Ray x", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorRay.x);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "Ray y", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorRay.y);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "Ray z", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorRay.z);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "Ray dx", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorRay.dx);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "Ray dy", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorRay.dy);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "Ray dz", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorRay.dz);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, " px", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorPos3D.x);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "py", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorPos3D.y);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, " pz", NK_TEXT_LEFT);
+        sprintf(str, "%f",  app.cursorPos3D.z);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+
+        nk_tree_pop(ctx);
+
+
+    }
+}
+
+void do_show_orbit_camera_debug(struct nk_context *ctx, App app){
+    if(nk_tree_push(ctx, NK_TREE_TAB, "Orbit Camera", NK_MINIMIZED)){
+        char str[20];
+        vec3 pos = {0,0,0};
+        get_position_orbit_camera(app.orbitCamera, pos);
+        nk_layout_row_static(ctx, 32, 64, 2);
+        
+        nk_label(ctx, "in Vox", NK_TEXT_LEFT);
+        sprintf(str, "%d", app.cameraInsideVoxel);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "yaw", NK_TEXT_LEFT);
+        sprintf(str, "%f", app.orbitCamera.yaw);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "pitch", NK_TEXT_LEFT);
+        sprintf(str, "%f", app.orbitCamera.pitch);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "px", NK_TEXT_LEFT);
+        sprintf(str, "%f", pos[0]);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "py", NK_TEXT_LEFT);
+        sprintf(str, "%f", pos[1]);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_label(ctx, "pz", NK_TEXT_LEFT);
+        sprintf(str, "%f", pos[2]);
+        nk_label(ctx, str , NK_TEXT_LEFT);
+
+        nk_tree_pop(ctx);
+    }
+
+}
+
+void do_show_floor_grid_debug(struct nk_context *ctx, App app){
+  if(nk_tree_push(ctx, NK_TREE_TAB, "Floor Grid", NK_MINIMIZED)){
+        char str1[20], str2[20], str3[20];
+        nk_layout_row_static(ctx, 32, 64, 4);
+        
+        nk_label(ctx, "iVec", NK_TEXT_LEFT);
+        sprintf(str1, "%f", app.floorGrid.iVec[0]);
+        sprintf(str2, "%f", app.floorGrid.iVec[1]);
+        sprintf(str3, "%f", app.floorGrid.iVec[2]);
+        nk_label(ctx, str1 , NK_TEXT_LEFT);
+        nk_label(ctx, str2 , NK_TEXT_LEFT);
+        nk_label(ctx, str3 , NK_TEXT_LEFT);
+
+        nk_label(ctx, "jVec", NK_TEXT_LEFT);
+        sprintf(str1, "%f", app.floorGrid.jVec[0]);
+        sprintf(str2, "%f", app.floorGrid.jVec[1]);
+        sprintf(str3, "%f", app.floorGrid.jVec[2]);
+        nk_label(ctx, str1 , NK_TEXT_LEFT);
+        nk_label(ctx, str2 , NK_TEXT_LEFT);
+        nk_label(ctx, str3 , NK_TEXT_LEFT);
+
+        nk_tree_pop(ctx);
+    }
+}
+
+void do_show_voxel_debug(struct nk_context *ctx, App app){
+    if(nk_tree_push(ctx, NK_TREE_TAB, "Voxel Store", NK_MINIMIZED)){
+        char str[20];
+        nk_layout_row_static(ctx, 32, 64, 2);
+        nk_label(ctx, "Vox Count", NK_TEXT_LEFT);
+        sprintf(str, "%d", app.voxelCount);
+        nk_label(ctx, str, NK_TEXT_LEFT);
+
+        nk_tree_pop(ctx);
+    }
+}
+void do_show_debug_window(struct nk_context *ctx, App app){
+    if(nk_begin(ctx, "Debug Window ", nk_rect(0,0, 128,128),
+        NK_WINDOW_BORDER |  NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |NK_WINDOW_TITLE |NK_WINDOW_MINIMIZABLE)){
+            do_show_cursor_debug(ctx, app);
+            do_show_orbit_camera_debug(ctx, app);
+            do_show_floor_grid_debug(ctx, app);
+            do_show_voxel_debug(ctx, app);
+    }
+    nk_end(ctx);
+}
+
+void do_show_file_menu(struct nk_context *ctx, App *app){
+    struct nk_vec2 size;
+    size.x = app->fileMenuSize[0];
+    size.y = app->fileMenuSize[1];
+    if(nk_menu_begin_label(ctx, "File",NK_TEXT_CENTERED, size)){
+        nk_layout_row_dynamic(ctx, 25,1);
+        nk_menu_item_label(ctx, "New", NK_TEXT_LEFT);
+        nk_menu_item_label(ctx, "Open", NK_TEXT_LEFT);
+        nk_menu_item_label(ctx, "Save", NK_TEXT_LEFT);
+        if(nk_menu_item_label(ctx, "Quit", NK_TEXT_LEFT)){
+            
+        }
+        nk_menu_end(ctx);
+    }
+}
+
+void do_show_menu_bar(struct nk_context *ctx, App *app){
+    nk_layout_row_static(ctx, app->menuBarHeight, app->menuBarButtonWidth, MENU_BAR_ITEM_COUNT);
+    do_show_file_menu(ctx, app);
+
+}
+
+void do_show_property_selector_panel(struct nk_context *ctx, App *app){
+    nk_layout_row_push(ctx, app->propertySelectorWidth);
+    if(nk_group_begin(ctx, "Property Selector",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){        
+        nk_group_end(ctx);
+    }
+
+}
+
+void do_show_properties_panel(struct nk_context *ctx, App *app){
+    nk_layout_row_push(ctx, app->propertyWidth);
+    if(nk_group_begin(ctx, "Properties ",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){
+        nk_group_end(ctx);
+    }
+}
+void do_show_render_panel(struct nk_context *ctx, App *app){
+    nk_layout_row_push(ctx, app->renderPanelWidth);
+    
+    if(nk_group_begin(ctx, "Render View ",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){
+        nk_layout_row_static(ctx,app->renderViewport.height, app->renderViewport.width, 1);
+        struct nk_image image = nk_image_id(app->frameTexture);
+        
+        nk_image_color(ctx,image, nk_white);
+        nk_group_end(ctx);
+    }
+
+
+}
+
+void do_show_main_window(struct nk_context *ctx, App *app)
+{
+    
+    nk_style_push_float(ctx, &ctx->style.window.padding.x, 0.0f);
+    nk_style_push_float(ctx, &ctx->style.window.padding.y, 0.0f);
+    nk_style_push_float(ctx, &ctx->style.window.spacing.x, 0.0f);
+    nk_style_push_float(ctx, &ctx->style.window.spacing.y, 0.0f);
+    nk_style_push_float(ctx, &ctx->style.window.group_padding.x, 0.0f);
+    nk_style_push_float(ctx, &ctx->style.window.group_padding.y, 0.0f);
+
+    if(nk_begin(ctx, "Main Window", nk_rect(0,0,app->windowViewport.width, app->windowViewport.height),
+    NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND |NK_WINDOW_BORDER) ){
+        do_show_menu_bar(ctx, app);
+        nk_layout_row_begin(ctx, NK_STATIC, app->windowViewport.height - app->menuBarHeight,3);
+        do_show_property_selector_panel(ctx, app);
+        do_show_properties_panel(ctx, app);
+        do_show_render_panel(ctx, app);
+        nk_layout_row_end(ctx);
+    }
+    nk_end(ctx);
+    nk_style_pop_float(ctx);
+    nk_style_pop_float(ctx);
+    nk_style_pop_float(ctx);
+    nk_style_pop_float(ctx);
+    nk_style_pop_float(ctx);
+    nk_style_pop_float(ctx);
+};
+
+int create_shader_program(GLuint *program, const char *vertShadeSrc, const char *fragShadeSrc){
     GLint success;
     char buffer[1000];
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -101,7 +390,7 @@ int createShaderProgram(GLuint *program, const char *vertShadeSrc, const char *f
     }
     return 0;
 }
-int loadTextFile(const char* path, const char** response){
+int load_text_file(const char* path, const char** response){
     FILE *filePointer;
     long fileBytes = 0;
     filePointer = fopen(path,"r");
@@ -124,543 +413,850 @@ int loadTextFile(const char* path, const char** response){
     return 0;
 
 }
-int loadShaderProgram(GLuint* program,const char* vertexPath,const char* fragmentPath){
+int load_shader_program(GLuint* program,const char* vertexPath,const char* fragmentPath){
     const char* vertexShaderSrc = NULL;
     const char* fragmentShaderSrc = NULL;
-    if(loadTextFile(vertexPath, &vertexShaderSrc)){
+    if(load_text_file(vertexPath, &vertexShaderSrc)){
         printf("failed to load vertex shader file\n");
         return 1;
     }
 
-    if(loadTextFile(fragmentPath, &fragmentShaderSrc)){
+    if(load_text_file(fragmentPath, &fragmentShaderSrc)){
         printf("failed to load fragment shader file\n");
         return 1;
     }
     
-    if(createShaderProgram(program, vertexShaderSrc, fragmentShaderSrc)){
+    if(create_shader_program(program, vertexShaderSrc, fragmentShaderSrc)){
         printf("failed to create shader program\n");
         return 1;
     }
     return 0;
 }
 
-float degToRad(float deg){
-    return deg /180 * M_PI;
+int is_point_inside_voxel(Voxel* voxel, float x, float y, float z){
+    if(voxel->size == 1){
+        float dx = x - voxel->origin[0];
+        float dy = y - voxel->origin[1];
+        float dz = z - voxel->origin[2];
+        return dx >= 0 && dy >= 0 && dz >= 0 && dx <= 1 && dy <= 1 && dz <=1; 
+    }
+    int nullCount = 0;
+    for(int i = 0; i < 8; i++){
+        nullCount += voxel->children[i] == NULL;
+    }
+
+    if(nullCount == 8){
+        float halfSize = voxel->size * 0.5;
+        float minX = voxel->origin[0] - halfSize;
+        float maxX = voxel->origin[0] + halfSize;
+        float minY = voxel->origin[1] - halfSize;
+        float maxY = voxel->origin[1] + halfSize;
+        float minZ = voxel->origin[2] - halfSize;
+        float maxZ = voxel->origin[2] + halfSize;
+        return x >= minX && x <= maxX && y >= minY && y <= maxY && z >=minZ && z <=maxZ;
+    }else{
+        for(int i = 0; i < 8; i++){
+            if(voxel->children[i] != NULL){
+                if(is_point_inside_voxel(voxel->children[i], x, y, z)){
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
 }
-void displayGridProperties(struct nk_context* ctx){
-    //int gridVisible = !*visible;
-    nk_layout_row_static(ctx, 32, 64, 1);
-   // nk_checkbox_label(ctx, "Visible", &gridVisible);
-    //*visible = !gridVisible;
-    if(nk_tree_push(ctx, NK_TREE_TAB,"color", NK_MINIMIZED)){
-        nk_layout_row_static(ctx, 32, 64, 2);
+
+int aabb_contains_point(Aabb box, float x, float y, float z){
+    int minX = box.x;
+    int maxX = box.x + box.width;
+    int minY = box.y;
+    int maxY = box.y + box.height;
+    int minZ = box.z;
+    int maxZ = box.z + box.depth;
+    return x >= minX && x < maxX && y >= minY && y < maxY &&
+        z >= minZ && z < maxZ;
+}
+
+Aabb voxel_to_aabb(Voxel voxel){
+    Aabb aabb;
+    float halfSize = voxel.size * 0.5;
+    int pred = halfSize *(voxel.size!=1);
+    aabb.x = voxel.origin[0] - pred;
+    aabb.y = voxel.origin[1] - pred;
+    aabb.z = voxel.origin[2] - pred;
+    aabb.width = voxel.size;
+    aabb.height = voxel.size;
+    aabb.depth = voxel.size;
+
+    return aabb;
+}
+
+void  ray_vs_aabb(Aabb box, Ray ray, vec3 hitpoint, int *didHit, int *boxSide){
+    *didHit = 0;
+    float left = box.x;
+    float right = box.x + box.width;
+    float bottom = box.y;
+    float top = box.y + box.height;
+    float front = box.z ;
+    float back = box.z + box.depth;
+    vec3 rayStart = {ray.x, ray.y, ray.z};
+    vec3 rayDirection = {ray.dx, ray.dy, ray.dz};
+    int bestDistance = 1000000000;
+    vec3 bestHitPoint;
+    int leftTarget = ray.dx > 0;
+    int rightTarget = ray.dx < 0;
+    int bottomTarget = ray.dy > 0;
+    int topTarget = ray.dy < 0;
+    int frontTarget = ray.dz > 0; 
+    int backTarget = ray.dz < 0; 
+
+    if(leftTarget){
+        vec3 hitPointLeft;        
+        float d = (left - ray.x) / ray.dx;        
+        vec3_scale(hitPointLeft, rayDirection, d);
+        vec3_add(hitPointLeft,hitPointLeft, rayStart);
+        float hitX = hitPointLeft[0];
+        float hitY = hitPointLeft[1];
+        float hitZ = hitPointLeft[2];
+        int hit = hitY >= bottom && hitY < top && hitZ >= front && hitZ < back;
+        if(hit){
+            bestHitPoint[0] = hitX;
+            bestHitPoint[1] = hitY;
+            bestHitPoint[2] = hitZ;
+            bestDistance = d;
+            *didHit = 1;
+            *boxSide = BOX_SIDE_LEFT;
+        }
+           
+    }else if(rightTarget){
+        vec3 hitPointRight;        
+        float d = (right - ray.x) / ray.dx;
+        vec3_scale(hitPointRight, rayDirection, d);
+        vec3_add(hitPointRight, hitPointRight, rayStart);
+        float hitX = hitPointRight[0];
+        float hitY = hitPointRight[1];
+        float hitZ = hitPointRight[2];
+        int hit = hitY >= bottom && hitY < top && hitZ >= front && hitZ < back;
+        if(hit){
+            bestHitPoint[0] = hitX;
+            bestHitPoint[1] = hitY;
+            bestHitPoint[2] = hitZ;
+            bestDistance = d;
+            *didHit = 1;
+            *boxSide = BOX_SIDE_RIGHT;
+
+
+        }
         
-        nk_label(ctx,"r", NK_TEXT_LEFT);
-        //gridColor->r =  nk_slide_int(ctx,0,gridColor->r*255,255,1)/(float)255;
-
-        nk_label(ctx,"g", NK_TEXT_LEFT);
-        //gridColor->g = nk_slide_int(ctx,0,gridColor->g*255,255,1)/(float)255;
-
-        nk_label(ctx,"b", NK_TEXT_LEFT);
-        //gridColor->b = nk_slide_int(ctx,0,gridColor->b*255,255,1)/(float)255;
-
-        nk_label(ctx,"a", NK_TEXT_LEFT);
-        //gridColor->a = nk_slide_int(ctx,0,gridColor->a*255,255,1)/(float)255;
-        nk_tree_pop(ctx);
     }
-
-}
-
-void displayVoxelEditor(struct nk_context* ctx, int* action){
-    nk_layout_row_static(ctx, 32, 32, 3);
-
-    if(nk_select_label(ctx, "Add Voxel", NK_TEXT_LEFT, 
-    (*action == voxel_edit_add_voxel) ? nk_true : nk_false)){
-        *action = voxel_edit_add_voxel;
-    }
-
-    if(nk_select_label(ctx, "Delete Voxel", NK_TEXT_LEFT,
-    (*action == voxel_edit_delete_voxel) ? nk_true : nk_false)){
-        *action = voxel_edit_delete_voxel;
-    }
-}
-void displayEditorProperties(struct nk_context* ctx){
-
-}
-void displayCameraProperties(struct nk_context* ctx){
-    if(nk_tree_push(ctx, NK_TREE_TAB,"Projection", NK_MINIMIZED)){
-        nk_layout_row_static(ctx, 32, 64, 2);
-
-        //nk_label(ctx, "fov", NK_TEXT_ALIGN_LEFT);
-        //camera->fov = nk_slide_float(ctx, degToRad(1.0f), camera->fov,degToRad(179.0f), degToRad(0.1f));
-        //nk_label(ctx, "far", NK_TEXT_ALIGN_LEFT);
-
-        //camera->far = nk_slide_float(ctx, 1.0, camera->far, 100, 0.01);
-        nk_tree_pop(ctx);
-
-    }
-}
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset){
-    NEW_Y_SCROLL = yoffset;        
-}
-void updateFrameTexture(GLuint *texture, int width, int height){
-    glBindTexture(GL_TEXTURE_2D, *texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-}
-void updateFrameDepthTexture(GLuint *texture, int width, int height){
-    glBindTexture(GL_TEXTURE_2D, *texture);
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width,height, 
-        0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL
-    );
-}
-
-
-
-void infoMenu(struct  nk_context* ctx)
-{
-    struct nk_vec2 size = {64,24*5};
-    if(nk_menu_begin_label(ctx,"info", NK_TEXT_CENTERED, size)){
-        nk_layout_row_dynamic(ctx, 25,1);
-        nk_menu_end(ctx);
-    }
-};
-void fileMenu(GLFWwindow* window,struct nk_context* ctx){
-    struct nk_vec2 size = {64,24*5};
-    if(nk_menu_begin_label(ctx, "File",NK_TEXT_CENTERED, size)){
-        nk_layout_row_dynamic(ctx, 25,1);
-        nk_menu_item_label(ctx, "New", NK_TEXT_LEFT);
-        nk_menu_item_label(ctx, "Open", NK_TEXT_LEFT);
-        nk_menu_item_label(ctx, "Save", NK_TEXT_LEFT);
-        if(nk_menu_item_label(ctx, "Quit", NK_TEXT_LEFT)){
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
-        nk_menu_end(ctx);
-    }
-
-}
-void editMenu(struct nk_context* ctx){
-    struct nk_vec2 size = {64,24*5};
-    if(nk_menu_begin_label(ctx,"Edit", NK_TEXT_CENTERED, size)){
-        nk_layout_row_dynamic(ctx, 25,1);
-        nk_menu_end(ctx);
-    }
-}
-
-void aboutMenu(struct nk_context* ctx){
-    struct nk_vec2 size = {128,24*5};
-    if(nk_menu_begin_label(ctx, "About",NK_TEXT_CENTERED, size)){
-        nk_layout_row_dynamic(ctx, 25,1);
-        nk_menu_item_label(ctx, "Contributors", NK_TEXT_LEFT);
-        nk_menu_item_label(ctx, "Documentation", NK_TEXT_LEFT);
-        nk_menu_end(ctx);
-    }
-
-}
-
-
-void mouseInit(GLFWwindow* window, Mouse* mouse){ 
-    double x, y;
-    glfwGetCursorPos(window, &x, &y);
-    mouse->x = (float)x;
-    mouse->y = (float)y;
-    mouse->deltaX = 0;
-    mouse->deltaY = 0;
-}
-
-void mouseUpdate(GLFWwindow* window, Mouse* mouse){
-    double nMousePosX, nMousePosY;
-
-    mouse->button[mouse_button_left] = glfwGetMouseButton(window,GLFW_MOUSE_BUTTON_LEFT);
-    mouse->button[mouse_button_right] = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT);
-    glfwGetCursorPos(window, &nMousePosX, &nMousePosY);
-    mouse->deltaX = (float) (nMousePosX - mouse->x);
-    mouse->deltaY = (float) (nMousePosY - mouse->y);
-    mouse->x = nMousePosX;
-    mouse->y = nMousePosY;
-}
-
-void initVoxelLab(VoxelLab *voxelLab){
-    voxelLab->primaryAction = Default_Action;
-    voxelLab->voxelEditFlag = voxel_edit_add_voxel;
-    voxelLab->navSelected = nav_select_editor_props;
-    voxelLab->mainViewport.x = 0;
-    voxelLab->mainViewport.y = 0;
-
-}
-
-int orbitCameraStateFromMouseButton(int mouseButton){
-   return orbit_cam_state_is_orbit * (
-            mouseButton == mouse_button_state_pressed ||
-            mouseButton == mouse_button_state_down
-        ) + orbit_cam_state_not_orbit *(
-            mouseButton == mouse_button_state_released ||
-            mouseButton == mouse_button_state_up
-        );
-
-}
-
-void voxelManipulation(VoxelLab* voxelLab){
-    float x, y;
-    mat4x4 viewMat, projMat, viewProjMat, inverseMat;
-    vec4 target4;
-    vec3 target, camPos, dV, direction;
-    switch (voxelLab->voxelEditFlag)
-    {
-    case voxel_edit_add_voxel:
-        if(voxelLab->mouse.button[mouse_button_left] == mouse_button_state_pressed){
-            x = (voxelLab->mouse.x - voxelLab->renderViewport.x) / voxelLab->renderViewport.width * 2;
-            x -= 1;
-            y = (voxelLab->mouse.y - voxelLab->renderViewport.y) / voxelLab->renderViewport.height * -2;
-            y += 1;
-            vec4 clickVector = {x,y,-1.0,1.0};
-            getViewMat(&voxelLab->orbitCam, viewMat);
-            getProjMat(&voxelLab->orbitCam, projMat);
-            mat4x4_mul(viewProjMat, projMat, viewMat);
-            mat4x4_invert(inverseMat, viewProjMat);
-
-            mat4x4_mul_vec4(target4, inverseMat, clickVector);
-            float div = 1 / target4[3];
-            target[0] = target4[0];
-            target[1] = target4[1];
-            target[2] = target4[2];
-            orbitCameraPosition(voxelLab->orbitCam, camPos);
-            vec3_sub(dV, target, camPos);
-            vec3_norm(direction, dV);
-            {
-                int x, y, z;
-                int voxelCount = countVoxelsInVoxelStore(&voxelLab->voxelStore);
-                float d = -camPos[1] / direction[1];
-                x = (camPos[0] + direction[0] * d);
-                y = 0;
-                z = (camPos[2] + direction[2] * d);
-
-                addVoxelToVoxelStore(&voxelLab->voxelStore, x, y, z);
-                printf("x %d, y %d, z %d\n",x,y,z);
-                getVoxelModelFromVoxelStore(&voxelLab->voxelStore,&voxelLab->voxelModelVerts, &voxelLab->voxelModelIndicies);
-                
-                glBindBuffer(GL_ARRAY_BUFFER, voxelLab->voxelModelVertexBuffer);
-                glBufferData(GL_ARRAY_BUFFER, 8 * sizeof(VoxelVertex) * voxelCount, voxelLab->voxelModelVerts,GL_DYNAMIC_DRAW);
-
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelLab->voxelModelIndexBuffer);
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(unsigned int) * voxelCount, voxelLab->voxelModelIndicies,GL_DYNAMIC_DRAW);
-
-            }              
-            
-        }
-
-       
-        break;
     
-    case voxel_edit_delete_voxel:
-        break;
+    
+    if(frontTarget){
+        vec3 hitPointFront;        
+        float d = (front - ray.z)/ ray.dz;
+        if(d < bestDistance){
+            vec3_scale(hitPointFront, rayDirection, d);
+            vec3_add(hitPointFront, hitPointFront, rayStart);
+            float hitX = hitPointFront[0];
+            float hitY = hitPointFront[1];
+            float hitZ = hitPointFront[2];
+            int hit = hitX >= left && hitX < right && hitY >= bottom && hitY < top;
+            if(hit){
+                bestHitPoint[0] = hitX;
+                bestHitPoint[1] = hitY;
+                bestHitPoint[2] = hitZ;
+                bestDistance = d;
+                *didHit = 1;
+                *boxSide = BOX_SIDE_FRONT;
+
+            }
+        }
+
+
+    }else if(backTarget){
+        vec3 hitPointBack;        
+        float d = (back - ray.z)/ ray.dz;
+        if(d < bestDistance){
+            vec3_scale(hitPointBack, rayDirection, d);
+            vec3_add(hitPointBack, hitPointBack, rayStart);
+            float hitX = hitPointBack[0];
+            float hitY = hitPointBack[1];
+            float hitZ = hitPointBack[2];
+            int hit = hitX >= left && hitX < right && hitY >= bottom && hitY < top;
+            if(hit){
+                bestHitPoint[0] = hitX;
+                bestHitPoint[1] = hitY;
+                bestHitPoint[2] = hitZ;
+                bestDistance = d;
+                *didHit = 1;
+                *boxSide = BOX_SIDE_BACK;
+            }
+        }
+    }
+   
+
+    if(bottomTarget){
+        vec3 hitPointBottom;        
+        float d = (bottom - ray.y)/ ray.dy;
+        if(d <= bestDistance){
+            vec3_scale(hitPointBottom, rayDirection, d);
+            vec3_add(hitPointBottom, hitPointBottom, rayStart);
+            float hitX = hitPointBottom[0];
+            float hitY = hitPointBottom[1];
+            float hitZ = hitPointBottom[2];
+            int hit = hitX >= left && hitX < right && hitZ >= front && hitZ < back;
+            if(hit){
+                bestHitPoint[0] = hitX;
+                bestHitPoint[1] = hitY;
+                bestHitPoint[2] = hitZ;
+                bestDistance = d;
+                *didHit = 1;
+                *boxSide = BOX_SIDE_BOTTOM;
+            }
+        }
+    }else if(topTarget){
+        vec3 hitPointTop;        
+        float d = (top - ray.y)/ ray.dy;
+        if(d <= bestDistance){
+            vec3_scale(hitPointTop, rayDirection, d);
+            vec3_add(hitPointTop, hitPointTop, rayStart);
+            float hitX = hitPointTop[0];
+            float hitY = hitPointTop[1];
+            float hitZ = hitPointTop[2];
+            int hit = hitX >= left && hitX < right && hitZ >= front && hitZ < back;
+            if(hit){
+                bestHitPoint[0] = hitX;
+                bestHitPoint[1] = hitY;
+                bestHitPoint[2] = hitZ;
+                bestDistance = d;
+                *didHit = 1;
+                *boxSide = BOX_SIDE_TOP;
+            }
+        }
+    }
+    if(*didHit){
+        hitpoint[0] = bestHitPoint[0];
+        hitpoint[1] = bestHitPoint[1];
+        hitpoint[2] = bestHitPoint[2];
     }
 
 }
 
-int main(int argc, char const *argv[])
-{    
+void ray_vs_voxel(Voxel* voxel, Ray ray, vec3 hitpoint, int *didHit, int *hitSide){
+    if(voxel->size == 1){
+        Aabb voxBox;
+        vec3 hitpoint;
+        voxBox = voxel_to_aabb(*voxel);
+        int boxHit = 0;
+        int boxSide;
+        vec3 boxHitPoint;
+        ray_vs_aabb(voxBox, ray, boxHitPoint, &boxHit, &boxSide);
+        
+        if(boxHit){
+            vec3 rayStart = {ray.x, ray.y, ray.z};
+            vec3 vectorToHitpoint, vectorToBox;
+            vec3_sub(vectorToHitpoint, hitpoint, rayStart);
+            vec3_sub(vectorToBox, boxHitPoint, rayStart);
+            float distanceToBox = vec3_mul_inner(vectorToBox, vectorToBox);
+            float distanceToHitpoint = vec3_mul_inner(vectorToHitpoint, vectorToHitpoint);
+        
+            if(distanceToBox < distanceToHitpoint || *didHit == 0){
+                hitpoint[0] = boxHitPoint[0];
+                hitpoint[1] = boxHitPoint[1];
+                hitpoint[2] = boxHitPoint[2];
+                *didHit = 1;
+                *hitSide = boxSide;
+                
+            }
+        }
+    }
+
+    int nullCount = 0;
+    for(int i = 0; i < 8; i++){
+        nullCount += voxel->children[i] == NULL;
+    }
+
+    if(nullCount == 8){ 
+        Aabb voxBox;
+        vec3 hitpoint;
+        voxBox = voxel_to_aabb(*voxel);
+        int boxHit;
+        int boxSide;
+        vec3 boxHitPoint;
+
+        ray_vs_aabb(voxBox, ray, hitpoint, &boxHit, &boxSide);
+        if(boxHit){
+            vec3 rayStart = {ray.x, ray.y, ray.z};
+            vec3 vectorToHitpoint, vectorToBox;
+            vec3_sub(vectorToHitpoint, hitpoint, rayStart);
+            vec3_sub(vectorToBox, boxHitPoint, rayStart);
+            float distanceToBox = vec3_mul_inner(vectorToBox, vectorToBox);
+            float distanceToHitpoint = vec3_mul_inner(vectorToHitpoint, vectorToHitpoint);
+        
+            if(distanceToBox < distanceToHitpoint || *didHit){
+                hitpoint[0] = boxHitPoint[0];
+                hitpoint[1] = boxHitPoint[1];
+                hitpoint[2] = boxHitPoint[2];
+                *didHit = 1;
+                *hitSide = boxSide;
+                
+            }
+        }
+     
+    }
+
+    for(int i = 0; i < 8; i++){
+        if(voxel->children[i] != NULL){
+            Aabb box;
+            box = voxel_to_aabb(*(voxel->children[i]));
+            if(aabb_contains_point(box, ray.x, ray.y, ray.z)){
+
+                ray_vs_voxel(voxel->children[i], ray, hitpoint, didHit, hitSide);
+            }else{
+                int hit;
+                int side;
+                ray_vs_aabb(box, ray, hitpoint,&hit, &side);
+                if(hit){
+                    ray_vs_voxel(voxel->children[i], ray, hitpoint, didHit, hitSide);
+                }
+            }
+
+        
+        }
+    }
+    
+}
+
+AppGlobals appGlobals;
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    appGlobals.xScroll = xoffset;
+    appGlobals.yScroll = yoffset;
+}
+
+void init_globals(AppGlobals* appGlobals){
+    appGlobals->xScroll = 0;
+    appGlobals->yScroll = 0;
+}
+
+void app_globals_zero_scrolls(AppGlobals *globals){
+    globals->xScroll = 0;
+    globals->yScroll = 0;
+
+}
+
+int main(int argc, char const *argv[]){
+    int appMode; 
     struct nk_glfw glfw = {0};
     struct nk_context *ctx;
-    VoxelLab voxelLab;
-    GLFWwindow* window; 
-    Panel menuPanel, navPanel, propPanel;
+    GLFWwindow *window;
+    App app;
 
+    init_globals(&appGlobals);
+    appMode = APP_MODE_DEFAULT ;
+    if (strcmp(argv[1], "debug") == 0)
+    {
+        appMode = APP_MODE_DEBUG;
+    }
+    
+        
     if (!glfwInit()){
         return -1;
     }
 
-    window = glfwCreateWindow(640, 480, "Voxel Lab", NULL, NULL);
 
+    window = glfwCreateWindow(640, 480, "Voxel Lab", NULL, NULL);
+    
     if (!window)
     {
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
+    
+    {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        app.windowViewport.width = width;
+        app.windowViewport.height = height;
+        app.windowViewport.ratio = width / (float)height;
+    }
+    {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        app.renderViewport.width = width;
+        app.renderViewport.height = height;
+        app.renderViewport.ratio = width / (float)height;
+    }
+
+
+    {
+        vec3 pos= {0,0,0};
+        init_orbit_camera(&app.orbitCamera, pos, 0,0,M_2_PI,1.0,100.0,app.renderViewport.ratio,10.0);
+    }
 
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to setup GLEW\n");
         exit(1);
-    }    
-    
-    initVoxelLab(&voxelLab); 
-    {
-        double x, y;
-        glfwGetCursorPos(window, &x, &y);
-        initMouse(&voxelLab.mouse,(float)x, (float)y);
-    }
-    
-    glfwGetWindowSize(window, &voxelLab.mainViewport.width, &voxelLab.mainViewport.height);
+    }  
+    ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);    
+    glfwSetScrollCallback(window, scroll_callback);  
 
-    ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);
     {
         struct nk_font_atlas *atlas;
         nk_glfw3_font_stash_begin(&glfw, &atlas);
         nk_glfw3_font_stash_end(&glfw);
+    }            
+
+    {
+        double x, y;   
+        glfwGetCursorPos(window, &x, &y);
+        app.cursorPos.x = (float)x;
+        app.cursorPos.y = (float)y;
+        app.cursorDelta.x = 0;
+        app.cursorDelta.y = 0;
+        
+    }
+
+    for(int i = 0; i < CURSOR_BUTTON_COUNT; i++){
+        app.cursorButtonState[i] = CURSOR_BUTTON_STATE_UP;
     }
     
     {
-        vec3 offset = {0.0,0.0,0.0};
-        initOrbitCamera(&voxelLab.orbitCam,offset,-M_PI_4, -M_PI_4,M_PI/3.0,1.0,100.0,1.0,10.0);
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        init_app_viewport(&app.renderViewport,0,0,width, height);
     }
-    initVoxelStore(&voxelLab.voxelStore);
-    initGridXZ(&voxelLab.gridY0, -16.0,-16.0,1.0,1.0,32,32, initGridColor(1.0,1.0,1.0,1.0), grid_visible_true);
-    
-    if(loadShaderProgram(&voxelLab.gridShader, "res/shaders/grid_vertex.glsl","res/shaders/grid_fragment.glsl")){
-        printf("nessesary shader failed to load\n");
-        return 1;
+    {
+        set_i_vec_grid(&app.floorGrid, 1,0,0);
+        set_j_vec_grid(&app.floorGrid, 0,0,1);
+        set_pos_grid(&app.floorGrid, 0,0,0);
+        app.floorGrid.iCount = 32;
+        app.floorGrid.jCount = 32;
     }
-    if(loadShaderProgram(&voxelLab.voxelShader, "res/shaders/voxel_vertex.glsl", "res/shaders/voxel_fragment.glsl")){
-        printf("nessessary shader failed to load\n");
+
+
+    {        
+        app.floorGridVertexCount = get_vertex_count(app.floorGrid);    
+        app.floorGridModel = (GridVertex*)calloc(app.floorGridVertexCount,sizeof(GridVertex));
+
+        int index = 0;
+        for(int i = 0; i <= app.floorGrid.iCount; i++){
+            vec3 vert1, vert2;
+            vec3_scale(vert1,app.floorGrid.iVec, i);
+            init_grid_vertex(&app.floorGridModel[index], vert1[0], vert1[1], vert1[2],1.0,1.0,1.0, 1.0);
+            index++;
+            vec3_scale(vert2, app.floorGrid.jVec, app.floorGrid.jCount );
+            vec3_add(vert2, vert2, vert1);
+            init_grid_vertex(&app.floorGridModel[index], vert2[0], vert2[1], vert2[2],1.0,1.0,1.0, 1.0);
+            index++; 
+        }
+        for(int i = 0; i <= app.floorGrid.jCount; i++){
+            vec3 vert1, vert2;
+            vec3_scale(vert1,app.floorGrid.jVec, i);
+            init_grid_vertex(&app.floorGridModel[index], vert1[0], vert1[1], vert1[2],1.0,1.0,1.0, 1.0);
+            index++;
+            vec3_scale(vert2, app.floorGrid.iVec, app.floorGrid.iCount);
+            vec3_add(vert2, vert2, vert1);
+            init_grid_vertex(&app.floorGridModel[index], vert2[0], vert2[1], vert2[2],1.0,1.0,1.0, 1.0);
+            index++;
+        }
+    }
+    if(load_shader_program(&app.gridShader,"res/shaders/grid_vertex.glsl", "res/shaders/grid_fragment.glsl")){
+        printf("failed to load shader\n");
         return 1;
     }
 
-    GLuint frameBuffer, worldTexture, worldDepthTexture;    
-    glGenTextures(1, &worldTexture);
-    glGenTextures(1, &worldDepthTexture);
-    glGenFramebuffers(1, &frameBuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
-    updateFrameTexture(&worldTexture, voxelLab.mainViewport.width, voxelLab.mainViewport.height);
+    if(load_shader_program(&app.voxelShader,"res/shaders/voxel_vertex.glsl","res/shaders/voxel_fragment.glsl")){
+        printf("failed to load nessessary shader\n");
+        return 1;
+    }
+    
+    glGenBuffers(1, &app.floorGridVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, app.floorGridVbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GridVertex) * app.floorGridVertexCount, app.floorGridModel, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenBuffers(1, &app.voxelModelVertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, app.voxelModelVertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenBuffers(1, &app.vertexModelIndexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.vertexModelIndexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    glGenFramebuffers(1, &app.frameBuffer);
+    glGenTextures(1, &app.frameTexture);
+    glGenTextures(1, &app.frameDepthTexture);
+    glBindFramebuffer(GL_FRAMEBUFFER, app.frameBuffer);
+    glBindTexture(GL_TEXTURE_2D, app.frameTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, app.renderViewport.width, app.renderViewport.height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, worldTexture, 0);  
-    updateFrameDepthTexture(&worldDepthTexture, voxelLab.mainViewport.width, voxelLab.mainViewport.height);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, app.frameTexture, 0);  
+    glBindTexture(GL_TEXTURE_2D, app.frameDepthTexture);
     
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, worldDepthTexture, 0);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, app.renderViewport.width,app.renderViewport.height, 
+        0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL
+    );
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+ 
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, app.frameDepthTexture, 0);
+
     if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE){
         printf("Framebuffer is not complete!");
     }
- 
-    menuPanel.x = 0;
-    menuPanel.y = 0;
-    menuPanel.width = voxelLab.mainViewport.width;
-    menuPanel.height = 48;
-    
-    navPanel.x = 0;
-    navPanel.y = menuPanel.height;
-    navPanel.width = 64;
-    
-    propPanel.x = 64;
-    propPanel.width = 144;
-    propPanel.y = menuPanel.height;
-    propPanel.height = voxelLab.mainViewport.height - menuPanel.height;
 
-    glfwSetScrollCallback(window, scroll_callback);
-       
-    glGenBuffers(1, &voxelLab.voxelModelVertexBuffer);
-    glGenBuffers(1, &voxelLab.voxelModelIndexBuffer);
+    init_color_rgba_f(&app.sceneBackColor, 0.5f,0.5f,0.5f,1.0f);
+    app.orbitCamera.state = ORBIT_CAMERA_STATE_NOT_ORBITING;
+    app.propertySelectorWidth = 64;
+    app.propertyWidth = 128;
+    app.appCursorFocus = APP_CURSOR_FOCUS_GUI;
+    app.cursorRayHit = 0;
+    app.voxelCount = 0;
 
-    voxelLab.primaryAction = Voxel_Manipulate;
-    while (!glfwWindowShouldClose(window)){       
-        int *primaryAction = &voxelLab.primaryAction;
-        int *voxelEditFlag = &voxelLab.voxelEditFlag;
-        int *navSelected = &voxelLab.navSelected;
-        OrbitCamera *orbitCam = &voxelLab.orbitCam;
-        Mouse *mouse = &voxelLab.mouse;
-        
-        glfwGetFramebufferSize(window, &voxelLab.mainViewport.width, &voxelLab.mainViewport.height);
-        
-        voxelLab.mainViewport.ratio = voxelLab.mainViewport.width / (float) voxelLab.mainViewport.height;
-        voxelLab.renderViewport.x = navPanel.width + propPanel.width;
-        voxelLab.renderViewport.y = menuPanel.height;
-        voxelLab.renderViewport.width = voxelLab.mainViewport.width - navPanel.width - propPanel.width;
-        voxelLab.renderViewport.height = voxelLab.mainViewport.height - menuPanel.height;
-        voxelLab.renderViewport.ratio = voxelLab.renderViewport.width / (float) voxelLab.renderViewport.height;
-        voxelLab.orbitCam.aspectRat = voxelLab.renderViewport.ratio;
-        
-        getViewMat(&voxelLab.orbitCam, &voxelLab.viewMat);
-        getProjMat(&voxelLab.orbitCam, &voxelLab.projMat);
-
-        updateFrameTexture(&worldTexture, voxelLab.renderViewport.width, voxelLab.renderViewport.height);
-        updateFrameDepthTexture(&worldDepthTexture, voxelLab.mainViewport.width, voxelLab.mainViewport.height);
-        
-        glfwPollEvents();    
-
-        voxelLab.orbitCam.distance += NEW_Y_SCROLL;
-        for(int i = 0; i < mouse_button_count; i++){
-            int button = glfwGetMouseButton(window, i);
-            nextMouseButtonState(&mouse->button[i],button == GLFW_PRESS);
+    app.voxelModelVerticies = (VoxelVertex*) malloc(sizeof(VoxelVertex));
+    app.voxelModelIndicies = (unsigned int*) malloc(sizeof(unsigned int));
+    while (!glfwWindowShouldClose(window)){  
+        {   
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            app.windowViewport.width = (float)width;
+            app.windowViewport.height = (float)height;
+            app.windowViewport.ratio = width / (float)height;
         }
+        
+
+        app.menuBarHeight = 24;
+        app.menuBarButtonWidth = 32;
+        app.renderPanelWidth = app.windowViewport.width - app.propertySelectorWidth - app.propertyWidth;
+        
+        app.renderViewport.x = app.propertyWidth + app.propertySelectorWidth;
+        app.renderViewport.y = app.menuBarHeight;
+        app.renderViewport.width = app.renderPanelWidth;
+        app.renderViewport.height = app.windowViewport.height - app.menuBarHeight;
+        app.renderViewport.ratio = app.renderViewport.width / app.renderViewport.height;
+        app.fileMenuSize[0] = 64;
+        app.fileMenuSize[1] = 64;
         {
             double x, y;
-            glfwGetCursorPos(window, &x, &y);
-            mouse->deltaX = x - mouse->x;
-            mouse->deltaY = y - mouse->y;
-            mouse->x = x;
-            mouse->y = y; 
-        }
-        
-        orbitCam->state = orbitCameraStateFromMouseButton(mouse->button[mouse_button_right]);
+            float normX, normY;  
+            glfwGetCursorPos(window, &x ,&y);
+            app.cursorDelta.x = x - app.cursorPos.x;
+            app.cursorDelta.y = y - app.cursorPos.y;
+            app.cursorPos.x = x;
+            app.cursorPos.y = y;
+            get_norm_position_from_cursor(&normX, &normY, app.cursorPos.x, app.cursorPos.y,
+            app.renderViewport.x, app.renderViewport.y, 
+            app.renderViewport.width, app.renderViewport.height
+            );
+            app.normCursorPos.x = normX;
+            app.normCursorPos.y = normY;
 
-        switch (*primaryAction)
+            
+        }
         {
-        case Default_Action:
-            break;
-        case Voxel_Manipulate:
-            voxelManipulation(&voxelLab);
-            break;
-        case Pan_Camera:
-            panCamera(orbitCam, voxelLab.mouse.deltaX, voxelLab.mouse.deltaY);
-            break;
-        case Rotate_Camera:
-            orbitCam->state = orbitCameraStateFromMouseButton(mouse->button[mouse_button_left]);
-            break;
-        case Zoom_Camera:
-            voxelLab.orbitCam.distance += voxelLab.mouse.deltaY;
-            break;            
-        default:
-            break;
+            int inRenderView = (app.normCursorPos.x >= -1.0 && app.normCursorPos.x < 1.0 && 
+                app.normCursorPos.y >= -1.0 && app.normCursorPos.y <= 1.0);
+            
+            app.appCursorFocus = APP_CURSOR_FOCUS_RENDER_VIEWPORT * inRenderView + APP_CURSOR_FOCUS_GUI * !inRenderView;
+        }
+        app.leftBtn = glfwGetMouseButton(window, 0);
+        app.rightBtn = glfwGetMouseButton(window, 1);        
+        do_cursor_event(&app);
+        do_orbit_camera_event(&app);
+        app.orbitCamera.distance += appGlobals.yScroll;
+
+        
+        glViewport(0,0, app.renderViewport.width, app.renderViewport.height);
+             
+        
+        
+        app.orbitCamera.aspectRat = app.renderViewport.ratio;
+        get_projection_matrix_orbit_camera(app.orbitCamera, app.projMat);
+        get_view_matrix_orbit_camera(app.orbitCamera, app.viewMat);
+        get_position_orbit_camera(app.orbitCamera, app.orbitCameraPosition);
+        {
+            mat4x4 projView;
+            mat4x4_mul(projView, app.projMat, app.viewMat);
+            mat4x4_invert(app.inverseMat, projView);
+        }
+        if(app.voxelHead != NULL){
+            app.cameraInsideVoxel = is_point_inside_voxel(app.voxelHead, 
+                app.orbitCameraPosition[0],
+                app.orbitCameraPosition[1],
+                app.orbitCameraPosition[2]
+            );
+        }
+        
+        {  
+            vec3 rayDirection;
+            vec4 target ,targ = {app.normCursorPos.x, -app.normCursorPos.y, -1.0, 1.0};
+            mat4x4_mul_vec4(target, app.inverseMat, targ);
+            float div = 1 / target[3];
+            vec3 target3 = {target[0] * div, target[1] * div, target[2] * div};
+            vec3_sub(rayDirection, target3, app.orbitCameraPosition);
+            vec3_norm(rayDirection, rayDirection);
+            init_ray(&app.cursorRay, 
+                app.orbitCameraPosition[0], app.orbitCameraPosition[1],app.orbitCameraPosition[2],
+                rayDirection[0],rayDirection[1],rayDirection[2]
+            ); 
         }    
-
-        orbitCameraDoOrbit(&voxelLab.orbitCam, mouse->deltaX, mouse->deltaY);
-
-
-        if(voxelLab.mouse.button[mouse_button_left] == mouse_button_state_released){
-            *primaryAction = Voxel_Manipulate;
-        }
-
-        nk_glfw3_new_frame(&glfw);
-        
-        if(nk_begin(ctx, "Main Panel", nk_rect(0,0, voxelLab.mainViewport.width, voxelLab.mainViewport.height),NK_WINDOW_BORDER | NK_WINDOW_BACKGROUND | NK_WINDOW_NO_SCROLLBAR)){
-            nk_layout_row_static(ctx, menuPanel.height, 48, 4);
-            infoMenu(ctx);
-            fileMenu(window, ctx);
-            editMenu(ctx);
-            aboutMenu(ctx);
             
-            nk_layout_set_min_row_height(ctx,voxelLab.renderViewport.height);
-            nk_layout_row_begin(ctx, NK_STATIC, 0, 3);
-            nk_layout_row_push(ctx, 48.0f);
-            nk_layout_reset_min_row_height(ctx);
-            float containerWidth = nk_widget_width(ctx);
-            if(nk_group_begin(ctx, "Nav Panel",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){
-                nk_layout_row_static(ctx,containerWidth - 8 ,containerWidth - 8,1);
-                if(nk_select_label(ctx, "Edit",NK_TEXT_ALIGN_CENTERED, 
-                    (*navSelected == nav_select_voxel_edit) ? nk_true: nk_false)){
-                        *navSelected =  nav_select_voxel_edit;
-                }
-                if(nk_select_label(ctx, "Camera",NK_TEXT_ALIGN_CENTERED, 
-                    (*navSelected == nav_select_camera_props) ? nk_true: nk_false)){
-                        *navSelected = nav_select_camera_props;
-                }
-                if(nk_select_label(ctx, "Editor",NK_TEXT_ALIGN_CENTERED, 
-                    (*navSelected == nav_select_editor_props) ? nk_true: nk_false)){
-                        *navSelected = nav_select_editor_props;
-                }
+            
+        int voxPassed = 0;
+        {
+            /*Voxel Test*/
+            vec3 voxHitPoint;
+            int sideHit;
+            if(app.voxelHead != NULL){
+                ray_vs_voxel(app.voxelHead, app.cursorRay, voxHitPoint, &voxPassed, &sideHit);
 
-                if(nk_select_label(ctx, "Grid",NK_TEXT_ALIGN_CENTERED, 
-                    (*navSelected == nav_select_grid_props) ? nk_true: nk_false)){
-                        *navSelected = nav_select_grid_props;
-                }
-                nk_group_end(ctx);
             }
-            
-            nk_layout_row_push(ctx, propPanel.width);
-            
-            if(nk_group_begin(ctx, "Prop Panel",NK_WINDOW_BORDER)){
-                switch (*navSelected){
-                    case nav_select_voxel_edit:
-                        displayVoxelEditor(ctx, &voxelLab.voxelEditFlag);
-                        break;
-                    case nav_select_camera_props:   
-                        displayCameraProperties(ctx);
-                        break;
-                    case nav_select_editor_props:
-                        displayEditorProperties(ctx);
-                        break;
-                    case nav_select_grid_props:
-                        displayGridProperties(ctx);
-                        break;
-                }
-                nk_group_end(ctx);
-            }
-            
-
-            nk_layout_row_push(ctx, voxelLab.renderViewport.width);
-            if(nk_group_begin(ctx, "Render Viewport",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){                
-                nk_layout_row_static(ctx, voxelLab.renderViewport.height, voxelLab.renderViewport.width,1);
-                nk_image_color(ctx, nk_image_id((int)worldTexture),nk_white);
-                nk_group_end(ctx);
-
+            if(voxPassed){
+                app.cursorPos3D.x = voxHitPoint[0];
+                app.cursorPos3D.y = voxHitPoint[1];
+                app.cursorPos3D.z = voxHitPoint[2];
             }
         }
-        nk_end(ctx);     
+        if(!voxPassed)
+        {
+            
+            float px, pz;
+            float py = 0; 
+            //floor Test
+            if(app.cursorRay.dy == 0){
+                app.cursorRayHit = 0;
+            }else{
 
-        struct nk_color transparent = {0x00, 0x00, 0x00, 0x00};
-        nk_style_push_style_item(ctx, &ctx->style.window.fixed_background, nk_style_item_color(transparent));
-        nk_style_push_color(ctx,&ctx->style.window.background, transparent);
-        if(nk_begin(ctx, "Cam Button Panel", nk_rect(voxelLab.mainViewport.width - 96,128, 64, 64*4), NK_WINDOW_NO_SCROLLBAR)){
-            nk_layout_row_static(ctx, 32, 32,1 );
-        
-            nk_style_push_float(ctx, &ctx->style.selectable.rounding, 15);
-            nk_bool down = nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true);
-            if(down){
-                nk_select_label(ctx, "r",NK_TEXT_ALIGN_CENTERED, nk_true);
-                *primaryAction = Rotate_Camera;
-            }else{
-                nk_select_label(ctx, "r",NK_TEXT_ALIGN_CENTERED, nk_false);
-            }
-            down = nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true);
-            if(down){
-                nk_select_label(ctx, "p",NK_TEXT_ALIGN_CENTERED, nk_true);
-                *primaryAction = Pan_Camera;
-            }else{
-                nk_select_label(ctx, "p",NK_TEXT_ALIGN_CENTERED, nk_false);
-            }
-            down = nk_widget_has_mouse_click_down(ctx, NK_BUTTON_LEFT, nk_true);
-            if(down){
-                nk_select_label(ctx, "z",NK_TEXT_ALIGN_CENTERED, nk_true);
-                *primaryAction = Zoom_Camera;
-            }else{
-                nk_select_label(ctx, "z",NK_TEXT_ALIGN_CENTERED, nk_false);
-            }
-            nk_style_pop_float(ctx);
+                app.cursorRayHit = 1;
+                float d = (-app.orbitCameraPosition[1]) / app.cursorRay.dy;
+                px = app.cursorRay.x + app.cursorRay.dx * d;
+                pz = app.cursorRay.z + app.cursorRay.dz * d;
+                app.cursorRayHit = 1;
+                app.cursorPos3D.x = px;
+                app.cursorPos3D.y = py;
+                app.cursorPos3D.z = pz;
+            }  
+                 
         }
-        nk_end(ctx);
-        nk_style_pop_color(ctx);
-        nk_style_pop_style_item(ctx);
+            //ray from voxel model
+           
+        //add voxel 
+        if(app.cursorButtonState[CURSOR_BUTTON_LEFT] == CURSOR_BUTTON_STATE_PRESSED){
+            if(app.cursorRayHit){
+                int x,y,z;
+                x = app.cursorPos3D.x;
+                y = app.cursorPos3D.y;
+                z = app.cursorPos3D.z;
+                if(x >= 0 && y >= 0 && z >= 0){
+                    VoxInt ux,uy,uz;
+                    ux = x; uy = y; uz = z;
+                    add_voxel_child_to_voxel_head(&app.voxelHead,ux,uy,uz);
+                }
+            }
+            if(app.voxelHead != NULL){
+                app.voxelCount = count_voxels(app.voxelHead);
+            }
+            
+            app.voxelModelVerticies = (VoxelVertex*) realloc(app.voxelModelVerticies, sizeof(VoxelVertex) * app.voxelCount * VERTEX_PER_CUBE);
+            app.voxelModelIndicies = (unsigned int*) realloc(app.voxelModelIndicies, sizeof(unsigned int) * INDICIES_PER_CUBE * app.voxelCount);
 
+            Voxel* voxelLeaves[app.voxelCount];
+
+            int index = 0;
+            get_leaf_voxels(app.voxelHead, voxelLeaves, &index);
+            {
+                unsigned int element = 0;
+                int vertexIndex = 0;
+                int elementIndex = 0;
+                for(int i = 0; i < app.voxelCount; i++){
+                    float x, y, z;
+                    int size;
+                    x = voxelLeaves[i]->origin[0];
+                    y = voxelLeaves[i]->origin[1];
+                    z = voxelLeaves[i]->origin[2];
+                    size = voxelLeaves[i]->size;                    
+                    if(size != 1){
+                        int halfSize = size >> 1;
+                        x -= halfSize;
+                        y -= halfSize;
+                        z -= halfSize;
+                    }
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x, y, z, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x, y + size, z, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x + size, y + size, z, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x + size, y, z, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x, y, z + size, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x, y + size, z + size, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x + size, y + size, z + size, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+                    init_voxel_vertex(&app.voxelModelVerticies[vertexIndex], x + size, y, z + size, 0.0, 1.0, 0.0, 1.0);
+                    vertexIndex++;
+
+                    app.voxelModelIndicies[elementIndex] = element;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 1;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 3;   
+                    elementIndex++;
+
+                    app.voxelModelIndicies[elementIndex] = element + 1;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 2;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 3; 
+                    elementIndex++;
+
+                    
+                    app.voxelModelIndicies[elementIndex] = element + 4;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 5;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element;   
+                    elementIndex++;
+
+                    app.voxelModelIndicies[elementIndex] = element + 5;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 1;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element;     
+                    elementIndex++;
+
+
+                    app.voxelModelIndicies[elementIndex] = element + 1;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 5;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 2;   
+                    elementIndex++;
+
+                    app.voxelModelIndicies[elementIndex] = element + 5;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 6;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 2;
+                    elementIndex++;
+
+                    
+                    app.voxelModelIndicies[elementIndex] = element + 4;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 0;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 7;   
+                    elementIndex++;
+
+                    app.voxelModelIndicies[elementIndex] = element;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 3;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 7;   
+                    elementIndex++;
+
+
+                    app.voxelModelIndicies[elementIndex] = element + 3;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 2;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 7;   
+                    elementIndex++;
+
+                    app.voxelModelIndicies[elementIndex] = element + 2;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 6;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 7;
+                    elementIndex++;
+
+
+                    app.voxelModelIndicies[elementIndex] = element + 7;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 6;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 5;   
+                    elementIndex++;
+
+                    app.voxelModelIndicies[elementIndex] = element + 6;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 5;
+                    elementIndex++;
+                    app.voxelModelIndicies[elementIndex] = element + 4;      
+                    elementIndex++;
+                    element += 8;
+
+                }
+                glBindBuffer(GL_ARRAY_BUFFER, app.voxelModelVertexBuffer);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(VoxelVertex) * VERTEX_PER_CUBE * app.voxelCount, app.voxelModelVerticies, GL_DYNAMIC_DRAW);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.vertexModelIndexBuffer);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * INDICIES_PER_CUBE * app.voxelCount, app.voxelModelIndicies, GL_DYNAMIC_DRAW);
+
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+          
+            }
+           
+            
+
+        }
         
 
-        glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glEnable(GL_DEPTH_TEST);
-        //glEnable(GL_CULL_FACE);
-        glDepthFunc(GL_LESS);
-        //glCullFace(GL_BACK);
-        glViewport(0, 0, voxelLab.renderViewport.width, voxelLab.renderViewport.height);
-        glClearColor(0.5, 0.5, 0.5, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  
-        glBindBuffer(GL_ARRAY_BUFFER, voxelLab.voxelModelVertexBuffer);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelLab.voxelModelIndexBuffer);
-        
-        glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3* sizeof(float),(void*)0);
+        app_globals_zero_scrolls(&appGlobals);
+        glfwPollEvents();  
+
+        glBindTexture(GL_TEXTURE_2D, app.frameTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, app.renderViewport.width, app.renderViewport.height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+        glBindTexture(GL_TEXTURE_2D, app.frameDepthTexture); 
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, app.renderViewport.width,app.renderViewport.height, 
+            0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL
+        );
+
+        glBindFramebuffer(GL_FRAMEBUFFER, app.frameBuffer);
+        {
+            ColorRGBAf col = app.sceneBackColor;
+            glClearColor(col.r, col.g, col.b, col.a);
+        }  
+        glClear(GL_COLOR_BUFFER_BIT |GL_DEPTH_BUFFER_BIT);
+        glBindBuffer(GL_ARRAY_BUFFER, app.floorGridVbo);
+        glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,7* sizeof(float),(void*)0);
         glEnableVertexAttribArray(0);
-        glUseProgram(voxelLab.voxelShader);
-        glUniformMatrix4fv(glGetUniformLocation(voxelLab.voxelShader,"uProjMat"),1,GL_FALSE, (float*)*voxelLab.projMat);
-        glUniformMatrix4fv(glGetUniformLocation(voxelLab.voxelShader,"uViewMat"),1,GL_FALSE, (float*)*voxelLab.viewMat);
-        glDrawElements(GL_TRIANGLES, 36 * countVoxelsInVoxelStore(&voxelLab.voxelStore), GL_UNSIGNED_INT, 0);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-        if(voxelLab.gridY0.visible){             
-            glBindBuffer(GL_ARRAY_BUFFER, voxelLab.gridY0.model.vertsBuffer);
-            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,7* sizeof(float),(void*)0);
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(1,4, GL_FLOAT, GL_FALSE,7 * sizeof(float),(void*)(sizeof(float) * 3));
-            glEnableVertexAttribArray(1);
-            glUseProgram(voxelLab.gridShader);
-            glUniformMatrix4fv(glGetUniformLocation(voxelLab.gridShader,"uProjMat"),1,GL_FALSE, (float*)*voxelLab.projMat);
-            glUniformMatrix4fv(glGetUniformLocation(voxelLab.gridShader,"uViewMat"),1,GL_FALSE, (float*)*voxelLab.viewMat);
-            glDrawArrays(GL_LINES,0, gridXZVertexCount(voxelLab.gridY0));
-        } 
+        glVertexAttribPointer(1,4, GL_FLOAT, GL_FALSE,7 * sizeof(float),(void*)(sizeof(float) * 3));
+        glEnableVertexAttribArray(1);
+        glUseProgram(app.gridShader);
+        glUniformMatrix4fv(glGetUniformLocation(app.gridShader,"uProjMat"),1,GL_FALSE, (float*)app.projMat);
+        glUniformMatrix4fv(glGetUniformLocation(app.gridShader,"uViewMat"),1,GL_FALSE, (float*)app.viewMat);
+        glDrawArrays(GL_LINES,0, app.floorGridVertexCount);
+        
+        glBindBuffer(GL_ARRAY_BUFFER, app.voxelModelVertexBuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.vertexModelIndexBuffer);
+        glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,7* sizeof(float),(void*)0);
+        glEnableVertexAttribArray(0);
+        glUseProgram(app.voxelShader);
+        glUniformMatrix4fv(glGetUniformLocation(app.voxelShader,"uProjMat"),1,GL_FALSE, (float*)app.projMat);
+        glUniformMatrix4fv(glGetUniformLocation(app.voxelShader,"uViewMat"),1,GL_FALSE, (float*)app.viewMat);
+        glDrawElements(GL_TRIANGLES, INDICIES_PER_CUBE * app.voxelCount, GL_UNSIGNED_INT, 0);
+        
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
+        
+        nk_glfw3_new_frame(&glfw);
+        do_show_main_window(ctx, &app);
+        if(appMode == APP_MODE_DEBUG){    
+            do_show_debug_window(ctx, app);
+        }
         nk_glfw3_render(&glfw, NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
+        
         glfwSwapBuffers(window);
-        NEW_Y_SCROLL = 0;
-    }
 
+    }     
     nk_glfw3_shutdown(&glfw);
     return 0;
+
 }

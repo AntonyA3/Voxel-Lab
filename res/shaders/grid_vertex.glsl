@@ -8,8 +8,6 @@ uniform mat4 uViewMat;
 out vec4 fcolor;
 out vec3 fposition;
 
-
-
 void main()
 {
     fcolor = vcolor;
