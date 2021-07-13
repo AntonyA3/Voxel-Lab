@@ -24,41 +24,93 @@
 #define VERTEX_PER_CUBE 8
 #define INDICIES_PER_CUBE 36 
 
+#ifndef COLOR_H
+#define COLOR_H
 #include "../include/color.h"
-#include "../include/cursor.h"
-#include "../include/grid.h"
-#include "../include/orbit_camera.h"
-#include "../include/menu_bar.h"
-#include "../include/vector2.h"
-#include "../include/vector3.h"
-#include "../include/app_viewport.h"
-#include "../include/voxel.h"
-#include "../include/aabb.h"
-#include "../include/ray.h"
+#endif
 
+#ifndef CURSOR_H
+#define CURSOR_H
+#include "../include/cursor.h"
+#endif
+
+#ifndef GRID_H
+#define GRID_H
+#include "../include/grid.h"
+#endif
+
+#ifndef ORBIT_CAMERA_H
+#define ORBIT_CAMERA_H
+#include "../include/orbit_camera.h"
+#endif
+
+#ifndef MENU_BAR_H
+#define MENU_BAR_H
+#include "../include/menu_bar.h"
+#endif
+
+#ifndef VECTOR2_H
+#define VECTOR2_H
+#include "../include/vector2.h"
+#endif
+
+#ifndef VECTOR3_H
+#define VECTOR3_H
+#include "../include/vector3.h"
+#endif
+
+#ifndef APP_VIEWPORT_H
+#define APP_VIEWPORT_H
+#include "../include/app_viewport.h"
+#endif
+
+#ifndef VOXEL_H
+#define VOXEL_H
+#include "../include/voxel.h"
+#endif
+
+#ifndef AABB_H
+#define AABB_H
+#include "../include/aabb.h"
+#endif
+
+#ifndef RAY_H
+#define RAY_H
+#include "../include/ray.h"
+#endif
 enum app_cursor_focus{APP_CURSOR_FOCUS_GUI,APP_CURSOR_FOCUS_RENDER_VIEWPORT, APP_CURSOR_FOCUS_OUTSIDE_WINDOW};
 enum app_mode{APP_MODE_DEBUG, APP_MODE_DEFAULT};
-enum box_sides{BOX_SIDE_LEFT, BOX_SIDE_RIGHT, BOX_SIDE_BOTTOM, BOX_SIDE_TOP, BOX_SIDE_FRONT, BOX_SIDE_BACK};
+enum shader_id{SHADER_ID_GRID_SHADER, SHADER_ID_VOXEL_SHADER, SHADER_ID_SHADER_COUNT};
+enum ray_hit_entity{RAY_HIT_NOTHING, RAY_HIT_ENTITY_GRID, RAY_HIT_ENTITY_VOXEL, RAY_HIT_Y_PLANE};
+enum color_data{COLOR_DATA_BACKGROUND_COLOR, COLOR_DATA_COUNT};
+enum voxel_edit{
+    VOXEL_EDIT_ADD_VOXEL = 0b10, 
+    VOXEL_EDIT_DELETE_VOXEL = 0b01
+};
+
+enum do_update {
+    DO_UPDATE_VIEW_MAT = 0b100, 
+    DO_UPDATE_PROJ_MAT = 0b010, 
+    DO_UPDATE_INV_MAT = 0b001, 
+    DO_UPDATE_NORMALIZED_CURSOR = 0b0001,
+    DO_UPDATE_CURSOR_RAY = 0b00001,
+    DO_RAYCAST_VOXEL_MODEL = 0b000001,
+    DO_RAYCAST_GRID = 0b000001,
+};
 
 typedef struct AppGlobals{
     float yScroll;
     float xScroll;
 }AppGlobals;
 
-typedef struct VoxelVertex{
-    float x, y, z;
-    float r, g, b, a;
-}VoxelVertex;
 
-void init_voxel_vertex(VoxelVertex* voxelVertex, float x, float y, float z, float r, float g, float b, float a){
-    voxelVertex->x = x;
-    voxelVertex->y = y;
-    voxelVertex->z = z;
-    voxelVertex->r = r;
-    voxelVertex->g = g;
-    voxelVertex->b = b;
-    voxelVertex->a = a;
-}
+
+typedef struct RaycastResult{
+    int entityHitType;
+    vec3 hitPoint, hitNormal;
+}RaycastResult;
+
+
 
 typedef struct App{
     Vector2 cursorPos;
@@ -74,7 +126,8 @@ typedef struct App{
     int cursorButtonState[CURSOR_BUTTON_COUNT];
     int appCursorFocus;
     int cameraInsideVoxel;
-    int projMatShouldUpdate, viewMatShouldUpdate, inverseMatShouldUpdate;
+    int updateRequest;
+    int voxelManipulationMode;
     ColorRGBAf sceneBackColor;
     AppViewport renderViewport, windowViewport;
     float menuBarHeight;
@@ -83,17 +136,16 @@ typedef struct App{
     Grid floorGrid;
     GridVertex* floorGridModel;
     int floorGridVertexCount;
-    ColorRGBAf floorGridColor;
-    GLuint floorGridVbo, gridShader, voxelShader, frameTexture, frameDepthTexture, frameBuffer,
+    ColorRGBAf colorData[COLOR_DATA_COUNT];
+    GLuint shaderID[SHADER_ID_SHADER_COUNT];
+   
+    GLuint floorGridVbo, frameTexture, frameDepthTexture, frameBuffer,
     voxelModelVertexBuffer, vertexModelIndexBuffer;
     Voxel* voxelHead;
     VoxelVertex* voxelModelVerticies;
     unsigned int* voxelModelIndicies;
-
     int voxelCount;
-    
 }App;
-
 
 void do_cursor_event(App* app){
     app->cursorButtonState[CURSOR_BUTTON_LEFT] = 
@@ -294,7 +346,9 @@ void do_show_menu_bar(struct nk_context *ctx, App *app){
 
 void do_show_property_selector_panel(struct nk_context *ctx, App *app){
     nk_layout_row_push(ctx, app->propertySelectorWidth);
-    if(nk_group_begin(ctx, "Property Selector",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){        
+    if(nk_group_begin(ctx, "Property Selector",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){  
+        
+
         nk_group_end(ctx);
     }
 
@@ -303,6 +357,18 @@ void do_show_property_selector_panel(struct nk_context *ctx, App *app){
 void do_show_properties_panel(struct nk_context *ctx, App *app){
     nk_layout_row_push(ctx, app->propertyWidth);
     if(nk_group_begin(ctx, "Properties ",NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)){
+        nk_layout_row_static(ctx, 32, 64, 2);
+        int addVoxSelected = (app->voxelManipulationMode == VOXEL_EDIT_ADD_VOXEL) ? 
+            nk_true: nk_false;  
+        if(nk_select_label(ctx, "addVox",NK_TEXT_ALIGN_LEFT, addVoxSelected)){
+            app->voxelManipulationMode = VOXEL_EDIT_ADD_VOXEL;
+        }
+        int deleteVoxSelected = (app->voxelManipulationMode == VOXEL_EDIT_DELETE_VOXEL) ? 
+            nk_true: nk_false;
+
+        if(nk_select_label(ctx, "deleteVox",NK_TEXT_ALIGN_LEFT, deleteVoxSelected)){
+            app->voxelManipulationMode = VOXEL_EDIT_DELETE_VOXEL;
+        }
         nk_group_end(ctx);
     }
 }
@@ -347,6 +413,8 @@ void do_show_main_window(struct nk_context *ctx, App *app)
     nk_style_pop_float(ctx);
     nk_style_pop_float(ctx);
 };
+
+
 
 int create_shader_program(GLuint *program, const char *vertShadeSrc, const char *fragShadeSrc){
     GLint success;
@@ -466,266 +534,240 @@ int is_point_inside_voxel(Voxel* voxel, float x, float y, float z){
     return 0;
 }
 
-int aabb_contains_point(Aabb box, float x, float y, float z){
-    int minX = box.x;
-    int maxX = box.x + box.width;
-    int minY = box.y;
-    int maxY = box.y + box.height;
-    int minZ = box.z;
-    int maxZ = box.z + box.depth;
-    return x >= minX && x < maxX && y >= minY && y < maxY &&
-        z >= minZ && z < maxZ;
+
+void do_delete_voxel_on_ray_hit_voxel(RaycastResult rayResult, App *app){
+    int sideNumber = normal_to_box_side(rayResult.hitNormal);
+    unsigned int voxelX, voxelY, voxelZ;
+    switch (sideNumber)
+    {
+    case BOX_SIDE_LEFT:
+        voxelX = round(rayResult.hitPoint[0]);
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = rayResult.hitPoint[2];
+        break;
+    case BOX_SIDE_RIGHT:
+        voxelX = round(rayResult.hitPoint[0]) - 1;
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = rayResult.hitPoint[2];
+
+        break;
+    case BOX_SIDE_BOTTOM:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = round(rayResult.hitPoint[1]);
+        voxelZ = rayResult.hitPoint[2];
+        break;
+    case BOX_SIDE_TOP:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = round(rayResult.hitPoint[1]) - 1;
+        voxelZ = rayResult.hitPoint[2];
+        break;
+    case BOX_SIDE_FRONT:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = round(rayResult.hitPoint[2]);
+        break;
+    case BOX_SIDE_BACK:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = round(rayResult.hitPoint[2]) - 1;
+        break;
+    }
+    remove_voxel_from_voxel_head(&app->voxelHead, voxelX, voxelY, voxelZ);
 }
 
-Aabb voxel_to_aabb(Voxel voxel){
-    Aabb aabb;
-    float halfSize = voxel.size * 0.5;
-    int pred = halfSize *(voxel.size!=1);
-    aabb.x = voxel.origin[0] - pred;
-    aabb.y = voxel.origin[1] - pred;
-    aabb.z = voxel.origin[2] - pred;
-    aabb.width = voxel.size;
-    aabb.height = voxel.size;
-    aabb.depth = voxel.size;
-
-    return aabb;
-}
-
-void  ray_vs_aabb(Aabb box, Ray ray, vec3 hitpoint, int *didHit, int *boxSide){
-    *didHit = 0;
-    float left = box.x;
-    float right = box.x + box.width;
-    float bottom = box.y;
-    float top = box.y + box.height;
-    float front = box.z ;
-    float back = box.z + box.depth;
-    vec3 rayStart = {ray.x, ray.y, ray.z};
-    vec3 rayDirection = {ray.dx, ray.dy, ray.dz};
-    int bestDistance = 1000000000;
-    vec3 bestHitPoint;
-    int leftTarget = ray.dx > 0;
-    int rightTarget = ray.dx < 0;
-    int bottomTarget = ray.dy > 0;
-    int topTarget = ray.dy < 0;
-    int frontTarget = ray.dz > 0; 
-    int backTarget = ray.dz < 0; 
-
-    if(leftTarget){
-        vec3 hitPointLeft;        
-        float d = (left - ray.x) / ray.dx;        
-        vec3_scale(hitPointLeft, rayDirection, d);
-        vec3_add(hitPointLeft,hitPointLeft, rayStart);
-        float hitX = hitPointLeft[0];
-        float hitY = hitPointLeft[1];
-        float hitZ = hitPointLeft[2];
-        int hit = hitY >= bottom && hitY < top && hitZ >= front && hitZ < back;
-        if(hit){
-            bestHitPoint[0] = hitX;
-            bestHitPoint[1] = hitY;
-            bestHitPoint[2] = hitZ;
-            bestDistance = d;
-            *didHit = 1;
-            *boxSide = BOX_SIDE_LEFT;
-        }
-           
-    }else if(rightTarget){
-        vec3 hitPointRight;        
-        float d = (right - ray.x) / ray.dx;
-        vec3_scale(hitPointRight, rayDirection, d);
-        vec3_add(hitPointRight, hitPointRight, rayStart);
-        float hitX = hitPointRight[0];
-        float hitY = hitPointRight[1];
-        float hitZ = hitPointRight[2];
-        int hit = hitY >= bottom && hitY < top && hitZ >= front && hitZ < back;
-        if(hit){
-            bestHitPoint[0] = hitX;
-            bestHitPoint[1] = hitY;
-            bestHitPoint[2] = hitZ;
-            bestDistance = d;
-            *didHit = 1;
-            *boxSide = BOX_SIDE_RIGHT;
-
-
+void do_voxel_edit_delete_voxel(App *app){
+    if(app->cursorButtonState[CURSOR_BUTTON_LEFT] == CURSOR_BUTTON_STATE_PRESSED){
+        RaycastResult rayResult;
+        rayResult.entityHitType = RAY_HIT_NOTHING;
+        if(app->voxelHead != NULL){
+            do_raycast_voxel_model(&rayResult, *app, app->voxelHead);
         }
         
-    }
-    
-    
-    if(frontTarget){
-        vec3 hitPointFront;        
-        float d = (front - ray.z)/ ray.dz;
-        if(d < bestDistance){
-            vec3_scale(hitPointFront, rayDirection, d);
-            vec3_add(hitPointFront, hitPointFront, rayStart);
-            float hitX = hitPointFront[0];
-            float hitY = hitPointFront[1];
-            float hitZ = hitPointFront[2];
-            int hit = hitX >= left && hitX < right && hitY >= bottom && hitY < top;
-            if(hit){
-                bestHitPoint[0] = hitX;
-                bestHitPoint[1] = hitY;
-                bestHitPoint[2] = hitZ;
-                bestDistance = d;
-                *didHit = 1;
-                *boxSide = BOX_SIDE_FRONT;
-
-            }
-        }
-
-
-    }else if(backTarget){
-        vec3 hitPointBack;        
-        float d = (back - ray.z)/ ray.dz;
-        if(d < bestDistance){
-            vec3_scale(hitPointBack, rayDirection, d);
-            vec3_add(hitPointBack, hitPointBack, rayStart);
-            float hitX = hitPointBack[0];
-            float hitY = hitPointBack[1];
-            float hitZ = hitPointBack[2];
-            int hit = hitX >= left && hitX < right && hitY >= bottom && hitY < top;
-            if(hit){
-                bestHitPoint[0] = hitX;
-                bestHitPoint[1] = hitY;
-                bestHitPoint[2] = hitZ;
-                bestDistance = d;
-                *didHit = 1;
-                *boxSide = BOX_SIDE_BACK;
-            }
-        }
-    }
-   
-
-    if(bottomTarget){
-        vec3 hitPointBottom;        
-        float d = (bottom - ray.y)/ ray.dy;
-        if(d <= bestDistance){
-            vec3_scale(hitPointBottom, rayDirection, d);
-            vec3_add(hitPointBottom, hitPointBottom, rayStart);
-            float hitX = hitPointBottom[0];
-            float hitY = hitPointBottom[1];
-            float hitZ = hitPointBottom[2];
-            int hit = hitX >= left && hitX < right && hitZ >= front && hitZ < back;
-            if(hit){
-                bestHitPoint[0] = hitX;
-                bestHitPoint[1] = hitY;
-                bestHitPoint[2] = hitZ;
-                bestDistance = d;
-                *didHit = 1;
-                *boxSide = BOX_SIDE_BOTTOM;
-            }
-        }
-    }else if(topTarget){
-        vec3 hitPointTop;        
-        float d = (top - ray.y)/ ray.dy;
-        if(d <= bestDistance){
-            vec3_scale(hitPointTop, rayDirection, d);
-            vec3_add(hitPointTop, hitPointTop, rayStart);
-            float hitX = hitPointTop[0];
-            float hitY = hitPointTop[1];
-            float hitZ = hitPointTop[2];
-            int hit = hitX >= left && hitX < right && hitZ >= front && hitZ < back;
-            if(hit){
-                bestHitPoint[0] = hitX;
-                bestHitPoint[1] = hitY;
-                bestHitPoint[2] = hitZ;
-                bestDistance = d;
-                *didHit = 1;
-                *boxSide = BOX_SIDE_TOP;
-            }
-        }
-    }
-    if(*didHit){
-        hitpoint[0] = bestHitPoint[0];
-        hitpoint[1] = bestHitPoint[1];
-        hitpoint[2] = bestHitPoint[2];
-    }
-
-}
-
-void ray_vs_voxel(Voxel* voxel, Ray ray, vec3 hitpoint, int *didHit, int *hitSide){
-    if(voxel->size == 1){
-        Aabb voxBox;
-        vec3 hitpoint;
-        voxBox = voxel_to_aabb(*voxel);
-        int boxHit = 0;
-        int boxSide;
-        vec3 boxHitPoint;
-        ray_vs_aabb(voxBox, ray, boxHitPoint, &boxHit, &boxSide);
-        
-        if(boxHit){
-            vec3 rayStart = {ray.x, ray.y, ray.z};
-            vec3 vectorToHitpoint, vectorToBox;
-            vec3_sub(vectorToHitpoint, hitpoint, rayStart);
-            vec3_sub(vectorToBox, boxHitPoint, rayStart);
-            float distanceToBox = vec3_mul_inner(vectorToBox, vectorToBox);
-            float distanceToHitpoint = vec3_mul_inner(vectorToHitpoint, vectorToHitpoint);
-        
-            if(distanceToBox < distanceToHitpoint || *didHit == 0){
-                hitpoint[0] = boxHitPoint[0];
-                hitpoint[1] = boxHitPoint[1];
-                hitpoint[2] = boxHitPoint[2];
-                *didHit = 1;
-                *hitSide = boxSide;
+        if(rayResult.hitPoint[0] >= 0 && 
+            rayResult.hitPoint[1] >= 0 &&
+            rayResult.hitPoint[2] >=0){
+            switch (rayResult.entityHitType)
+            {
+            case RAY_HIT_ENTITY_VOXEL:
                 
+                do_delete_voxel_on_ray_hit_voxel(rayResult, app);
+                break;
             }
+
         }
-    }
-
-    int nullCount = 0;
-    for(int i = 0; i < 8; i++){
-        nullCount += voxel->children[i] == NULL;
-    }
-
-    if(nullCount == 8){ 
-        Aabb voxBox;
-        vec3 hitpoint;
-        voxBox = voxel_to_aabb(*voxel);
-        int boxHit;
-        int boxSide;
-        vec3 boxHitPoint;
-
-        ray_vs_aabb(voxBox, ray, hitpoint, &boxHit, &boxSide);
-        if(boxHit){
-            vec3 rayStart = {ray.x, ray.y, ray.z};
-            vec3 vectorToHitpoint, vectorToBox;
-            vec3_sub(vectorToHitpoint, hitpoint, rayStart);
-            vec3_sub(vectorToBox, boxHitPoint, rayStart);
-            float distanceToBox = vec3_mul_inner(vectorToBox, vectorToBox);
-            float distanceToHitpoint = vec3_mul_inner(vectorToHitpoint, vectorToHitpoint);
         
-            if(distanceToBox < distanceToHitpoint || *didHit){
-                hitpoint[0] = boxHitPoint[0];
-                hitpoint[1] = boxHitPoint[1];
-                hitpoint[2] = boxHitPoint[2];
-                *didHit = 1;
-                *hitSide = boxSide;
-                
-            }
-        }
-     
     }
-
-    for(int i = 0; i < 8; i++){
-        if(voxel->children[i] != NULL){
-            Aabb box;
-            box = voxel_to_aabb(*(voxel->children[i]));
-            if(aabb_contains_point(box, ray.x, ray.y, ray.z)){
-
-                ray_vs_voxel(voxel->children[i], ray, hitpoint, didHit, hitSide);
-            }else{
-                int hit;
-                int side;
-                ray_vs_aabb(box, ray, hitpoint,&hit, &side);
-                if(hit){
-                    ray_vs_voxel(voxel->children[i], ray, hitpoint, didHit, hitSide);
-                }
-            }
-
-        
-        }
-    }
-    
 }
+int is_target_2_closer(vec3 start, vec3 target1, vec3 target2){
+    vec3 toTarget1, toTarget2;
+    vec3_sub(toTarget1,target2, start);
+    vec3_sub(toTarget2, target1, start);
+    if(vec3_mul_inner(toTarget2, toTarget2) < vec3_mul_inner(toTarget1, toTarget1)){
+        return 1;
+    }
+    return 0;
+}
+
+void do_raycast_y_0(RaycastResult* rayResult, App app){
+    float hitX, hitZ;
+    if(app.cursorRay.dy != 0 && app.cursorRay.y > 0){
+        float d = (-app.cursorRay.y) / app.cursorRay.dy;
+        hitX = app.cursorRay.x + app.cursorRay.dx * d;
+        hitZ = app.cursorRay.z + app.cursorRay.dz * d;
+        vec3 start = {app.cursorRay.x, app.cursorRay.y, app.cursorRay.z};
+        vec3 newTarget = {hitX, 0, hitZ};
+        int pred = is_target_2_closer(start, rayResult->hitNormal, newTarget);
+        if(rayResult->entityHitType == RAY_HIT_NOTHING || pred){
+            rayResult->entityHitType = RAY_HIT_Y_PLANE;
+            rayResult->hitPoint[0] = hitX;
+            rayResult->hitPoint[1] = 0;
+            rayResult->hitPoint[2] = hitZ;
+            rayResult->hitNormal[0] = 0;
+            rayResult->hitNormal[1] = -1 * (app.cursorRay.dy > 0) + 1 * (app.cursorRay.dy < 0);
+            rayResult->hitNormal[2] = 0;
+        }
+    }else{
+        rayResult->entityHitType = RAY_HIT_NOTHING;
+    }    
+}
+
+void boxside_to_normal(int boxSide, vec3 normal){
+    switch (boxSide)
+    {
+    case BOX_SIDE_LEFT:
+        normal[0] = -1;
+        normal[1] = 0;
+        normal[2] = 0;
+        break;
+    case BOX_SIDE_RIGHT:
+        normal[0] = 1;
+        normal[1] = 0;
+        normal[2] = 0;
+        break;
+    case BOX_SIDE_BOTTOM:
+        normal[0] = 0;
+        normal[1] = -1;
+        normal[2] = 0;
+        break;
+    case BOX_SIDE_TOP:
+        normal[0] = 0;
+        normal[1] = 1;
+        normal[2] = 0;
+        break;
+    case BOX_SIDE_FRONT:
+        normal[0] = 0;
+        normal[1] = 0;
+        normal[2] = -1;
+        break;
+    case BOX_SIDE_BACK:
+        normal[0] = 0;
+        normal[1] = 0;
+        normal[2] = 1;
+        break;
+    }
+}
+
+int normal_to_box_side(vec3 normal){
+    int side = 0;
+    side += BOX_SIDE_RIGHT * (normal[0] == 1);
+    side += BOX_SIDE_BOTTOM * (normal[-1] == -1);
+    side += BOX_SIDE_TOP * (normal[1] == 1);
+    side += BOX_SIDE_FRONT * (normal[2] == -1);
+    side += BOX_SIDE_BACK * (normal[2] == 1);
+    return side;
+}
+    
+void do_raycast_voxel_model(RaycastResult* rayResult, App app, Voxel* voxelHead){
+    int hit = 0;
+    int sideHit;
+    vec3 hitpoint;
+    ray_vs_voxel_grid(voxelHead, app.cursorRay, &hit, hitpoint, &sideHit);
+
+    if(hit){
+        vec3 start;
+        int pred = is_target_2_closer(start, rayResult->hitPoint, hitpoint);
+        if(rayResult->entityHitType == RAY_HIT_NOTHING || pred){
+            rayResult->entityHitType = RAY_HIT_ENTITY_VOXEL;
+            rayResult->hitPoint[0] = hitpoint[0];
+            rayResult->hitPoint[1] = hitpoint[1];
+            rayResult->hitPoint[2] = hitpoint[2];
+            boxside_to_normal(sideHit, rayResult->hitNormal);
+        }
+    }
+
+} 
+
+void do_add_voxel_on_ray_hit_voxel(RaycastResult rayResult, App *app){
+    int sideNumber = normal_to_box_side(rayResult.hitNormal);
+    unsigned int voxelX, voxelY, voxelZ;
+    switch (sideNumber)
+    {
+    case BOX_SIDE_LEFT:
+        voxelX = round(rayResult.hitPoint[0]);
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = rayResult.hitPoint[2];
+        break;
+    case BOX_SIDE_RIGHT:
+        voxelX = round(rayResult.hitPoint[0]);
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = rayResult.hitPoint[2];
+
+        break;
+    case BOX_SIDE_BOTTOM:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = round(rayResult.hitPoint[1]);
+        voxelZ = rayResult.hitPoint[2];
+        break;
+    case BOX_SIDE_TOP:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = round(rayResult.hitPoint[1]);
+        voxelZ = rayResult.hitPoint[2];
+        break;
+    case BOX_SIDE_FRONT:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = round(rayResult.hitPoint[2]);
+        break;
+    case BOX_SIDE_BACK:
+        voxelX = rayResult.hitPoint[0];
+        voxelY = rayResult.hitPoint[1];
+        voxelZ = round(rayResult.hitPoint[2]);
+        break;
+    }
+
+    add_voxel_child_to_voxel_head(&app->voxelHead, voxelX, voxelY, voxelZ);
+}
+
+void do_voxel_edit_add_voxel(App *app){
+    if(app->cursorButtonState[CURSOR_BUTTON_LEFT] == CURSOR_BUTTON_STATE_PRESSED){
+        RaycastResult rayResult;
+        rayResult.entityHitType = RAY_HIT_NOTHING;
+        do_raycast_y_0(&rayResult, *app);
+        if(app->voxelHead != NULL){
+            do_raycast_voxel_model(&rayResult, *app, app->voxelHead);
+
+        }
+        
+        if(rayResult.hitPoint[0] >= 0 && 
+            rayResult.hitPoint[1] >= 0 &&
+            rayResult.hitPoint[2] >=0){
+            switch (rayResult.entityHitType)
+            {
+            case RAY_HIT_Y_PLANE:
+                add_voxel_child_to_voxel_head(&app->voxelHead, 
+                (VoxInt)rayResult.hitPoint[0], (VoxInt)0, (VoxInt)rayResult.hitPoint[2]);
+                break;
+            case RAY_HIT_ENTITY_VOXEL:
+                do_add_voxel_on_ray_hit_voxel(rayResult, app);
+                break;
+            }
+
+        }
+        
+    }
+}
+
+
 
 AppGlobals appGlobals;
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
@@ -777,16 +819,13 @@ int main(int argc, char const *argv[]){
     {
         int width, height;
         glfwGetWindowSize(window, &width, &height);
-        app.windowViewport.width = width;
-        app.windowViewport.height = height;
-        app.windowViewport.ratio = width / (float)height;
+        init_app_viewport(&app.windowViewport,0,0,width,height);
+
     }
     {
         int width, height;
         glfwGetWindowSize(window, &width, &height);
-        app.renderViewport.width = width;
-        app.renderViewport.height = height;
-        app.renderViewport.ratio = width / (float)height;
+        init_app_viewport(&app.renderViewport,0,0,width,height);
     }
 
 
@@ -862,12 +901,12 @@ int main(int argc, char const *argv[]){
             index++;
         }
     }
-    if(load_shader_program(&app.gridShader,"res/shaders/grid_vertex.glsl", "res/shaders/grid_fragment.glsl")){
+    if(load_shader_program(&app.shaderID[SHADER_ID_GRID_SHADER],"res/shaders/grid_vertex.glsl", "res/shaders/grid_fragment.glsl")){
         printf("failed to load shader\n");
         return 1;
     }
 
-    if(load_shader_program(&app.voxelShader,"res/shaders/voxel_vertex.glsl","res/shaders/voxel_fragment.glsl")){
+    if(load_shader_program(&app.shaderID[SHADER_ID_VOXEL_SHADER],"res/shaders/voxel_vertex.glsl","res/shaders/voxel_fragment.glsl")){
         printf("failed to load nessessary shader\n");
         return 1;
     }
@@ -909,7 +948,7 @@ int main(int argc, char const *argv[]){
         printf("Framebuffer is not complete!");
     }
 
-    init_color_rgba_f(&app.sceneBackColor, 0.5f,0.5f,0.5f,1.0f);
+    init_color_rgba_f(&app.colorData[COLOR_DATA_BACKGROUND_COLOR], 0.5f,0.5f,0.5f,1.0f);
     app.orbitCamera.state = ORBIT_CAMERA_STATE_NOT_ORBITING;
     app.propertySelectorWidth = 64;
     app.propertyWidth = 128;
@@ -919,7 +958,14 @@ int main(int argc, char const *argv[]){
 
     app.voxelModelVerticies = (VoxelVertex*) malloc(sizeof(VoxelVertex));
     app.voxelModelIndicies = (unsigned int*) malloc(sizeof(unsigned int));
+    
+    app.voxelManipulationMode = VOXEL_EDIT_ADD_VOXEL;
     while (!glfwWindowShouldClose(window)){  
+
+        app.updateRequest = DO_UPDATE_VIEW_MAT + DO_UPDATE_PROJ_MAT + 
+            DO_UPDATE_INV_MAT + DO_UPDATE_NORMALIZED_CURSOR + 
+            DO_UPDATE_CURSOR_RAY + DO_RAYCAST_VOXEL_MODEL + DO_RAYCAST_GRID;
+        
         {   
             int width, height;
             glfwGetWindowSize(window, &width, &height);
@@ -933,13 +979,18 @@ int main(int argc, char const *argv[]){
         app.menuBarButtonWidth = 32;
         app.renderPanelWidth = app.windowViewport.width - app.propertySelectorWidth - app.propertyWidth;
         
-        app.renderViewport.x = app.propertyWidth + app.propertySelectorWidth;
-        app.renderViewport.y = app.menuBarHeight;
-        app.renderViewport.width = app.renderPanelWidth;
-        app.renderViewport.height = app.windowViewport.height - app.menuBarHeight;
+        init_app_viewport(
+            &app.renderViewport,
+            app.propertyWidth + app.propertySelectorWidth, 
+            app.menuBarHeight,
+            app.renderPanelWidth,
+            app.windowViewport.height - app.menuBarHeight
+        );
         app.renderViewport.ratio = app.renderViewport.width / app.renderViewport.height;
         app.fileMenuSize[0] = 64;
         app.fileMenuSize[1] = 64;
+
+        if(app.updateRequest | DO_UPDATE_NORMALIZED_CURSOR)
         {
             double x, y;
             float normX, normY;  
@@ -953,16 +1004,9 @@ int main(int argc, char const *argv[]){
             app.renderViewport.width, app.renderViewport.height
             );
             app.normCursorPos.x = normX;
-            app.normCursorPos.y = normY;
-
-            
+            app.normCursorPos.y = normY;         
         }
-        {
-            int inRenderView = (app.normCursorPos.x >= -1.0 && app.normCursorPos.x < 1.0 && 
-                app.normCursorPos.y >= -1.0 && app.normCursorPos.y <= 1.0);
-            
-            app.appCursorFocus = APP_CURSOR_FOCUS_RENDER_VIEWPORT * inRenderView + APP_CURSOR_FOCUS_GUI * !inRenderView;
-        }
+ 
         app.leftBtn = glfwGetMouseButton(window, 0);
         app.rightBtn = glfwGetMouseButton(window, 1);        
         do_cursor_event(&app);
@@ -970,93 +1014,60 @@ int main(int argc, char const *argv[]){
         app.orbitCamera.distance += appGlobals.yScroll;
 
         
-        glViewport(0,0, app.renderViewport.width, app.renderViewport.height);
              
-        
-        
+       
         app.orbitCamera.aspectRat = app.renderViewport.ratio;
-        get_projection_matrix_orbit_camera(app.orbitCamera, app.projMat);
-        get_view_matrix_orbit_camera(app.orbitCamera, app.viewMat);
-        get_position_orbit_camera(app.orbitCamera, app.orbitCameraPosition);
-        {
+
+        if(app.updateRequest | DO_UPDATE_PROJ_MAT){
+            get_projection_matrix_orbit_camera(app.orbitCamera, app.projMat);
+        }
+        if(app.updateRequest | DO_UPDATE_VIEW_MAT){
+            get_view_matrix_orbit_camera(app.orbitCamera, app.viewMat);
+
+        }
+        if(app.updateRequest | DO_UPDATE_INV_MAT){
             mat4x4 projView;
+            get_position_orbit_camera(app.orbitCamera, app.orbitCameraPosition);
             mat4x4_mul(projView, app.projMat, app.viewMat);
             mat4x4_invert(app.inverseMat, projView);
+            
         }
-        if(app.voxelHead != NULL){
-            app.cameraInsideVoxel = is_point_inside_voxel(app.voxelHead, 
-                app.orbitCameraPosition[0],
-                app.orbitCameraPosition[1],
-                app.orbitCameraPosition[2]
-            );
-        }
-        
+
+        if(app.updateRequest | DO_UPDATE_CURSOR_RAY)
         {  
             vec3 rayDirection;
-            vec4 target ,targ = {app.normCursorPos.x, -app.normCursorPos.y, -1.0, 1.0};
-            mat4x4_mul_vec4(target, app.inverseMat, targ);
-            float div = 1 / target[3];
-            vec3 target3 = {target[0] * div, target[1] * div, target[2] * div};
-            vec3_sub(rayDirection, target3, app.orbitCameraPosition);
+            vec4 worldSpaceTarget, screenSpaceTarget;
+            vec3 worldTarget3D; 
+            float div;
+            screenSpaceTarget[0] = app.normCursorPos.x;
+            screenSpaceTarget[1] = -app.normCursorPos.y;
+            screenSpaceTarget[2] = -1.0;
+            screenSpaceTarget[3] = 1.0;
+            mat4x4_mul_vec4(worldSpaceTarget, app.inverseMat, screenSpaceTarget);
+            div = 1 / worldSpaceTarget[3];
+            worldTarget3D[0] = worldSpaceTarget[0] * div;
+            worldTarget3D[1] = worldSpaceTarget[1] * div;
+            worldTarget3D[2] = worldSpaceTarget[2] * div;
+            vec3_sub(rayDirection, worldTarget3D, app.orbitCameraPosition);
             vec3_norm(rayDirection, rayDirection);
             init_ray(&app.cursorRay, 
                 app.orbitCameraPosition[0], app.orbitCameraPosition[1],app.orbitCameraPosition[2],
                 rayDirection[0],rayDirection[1],rayDirection[2]
             ); 
-        }    
-            
-            
-        int voxPassed = 0;
-        {
-            /*Voxel Test*/
-            vec3 voxHitPoint;
-            int sideHit;
-            if(app.voxelHead != NULL){
-                ray_vs_voxel(app.voxelHead, app.cursorRay, voxHitPoint, &voxPassed, &sideHit);
+        } 
 
-            }
-            if(voxPassed){
-                app.cursorPos3D.x = voxHitPoint[0];
-                app.cursorPos3D.y = voxHitPoint[1];
-                app.cursorPos3D.z = voxHitPoint[2];
-            }
-        }
-        if(!voxPassed)
+        switch (app.voxelManipulationMode)
         {
-            
-            float px, pz;
-            float py = 0; 
-            //floor Test
-            if(app.cursorRay.dy == 0){
-                app.cursorRayHit = 0;
-            }else{
-
-                app.cursorRayHit = 1;
-                float d = (-app.orbitCameraPosition[1]) / app.cursorRay.dy;
-                px = app.cursorRay.x + app.cursorRay.dx * d;
-                pz = app.cursorRay.z + app.cursorRay.dz * d;
-                app.cursorRayHit = 1;
-                app.cursorPos3D.x = px;
-                app.cursorPos3D.y = py;
-                app.cursorPos3D.z = pz;
-            }  
-                 
+        case VOXEL_EDIT_ADD_VOXEL:
+            do_voxel_edit_add_voxel(&app);
+            break;
+        case VOXEL_EDIT_DELETE_VOXEL :
+            do_voxel_edit_delete_voxel(&app);
+            break;
         }
-            //ray from voxel model
-           
-        //add voxel 
+        
         if(app.cursorButtonState[CURSOR_BUTTON_LEFT] == CURSOR_BUTTON_STATE_PRESSED){
-            if(app.cursorRayHit){
-                int x,y,z;
-                x = app.cursorPos3D.x;
-                y = app.cursorPos3D.y;
-                z = app.cursorPos3D.z;
-                if(x >= 0 && y >= 0 && z >= 0){
-                    VoxInt ux,uy,uz;
-                    ux = x; uy = y; uz = z;
-                    add_voxel_child_to_voxel_head(&app.voxelHead,ux,uy,uz);
-                }
-            }
+
             if(app.voxelHead != NULL){
                 app.voxelCount = count_voxels(app.voxelHead);
             }
@@ -1067,7 +1078,10 @@ int main(int argc, char const *argv[]){
             Voxel* voxelLeaves[app.voxelCount];
 
             int index = 0;
-            get_leaf_voxels(app.voxelHead, voxelLeaves, &index);
+            if(app.voxelHead != NULL){
+                get_leaf_voxels(app.voxelHead, voxelLeaves, &index);
+            }
+            
             {
                 unsigned int element = 0;
                 int vertexIndex = 0;
@@ -1184,11 +1198,11 @@ int main(int argc, char const *argv[]){
                     app.voxelModelIndicies[elementIndex] = element + 5;   
                     elementIndex++;
 
-                    app.voxelModelIndicies[elementIndex] = element + 6;
+                    app.voxelModelIndicies[elementIndex] = element + 4;
                     elementIndex++;
                     app.voxelModelIndicies[elementIndex] = element + 5;
                     elementIndex++;
-                    app.voxelModelIndicies[elementIndex] = element + 4;      
+                    app.voxelModelIndicies[elementIndex] = element + 7;      
                     elementIndex++;
                     element += 8;
 
@@ -1202,8 +1216,6 @@ int main(int argc, char const *argv[]){
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
           
             }
-           
-            
 
         }
         
@@ -1218,30 +1230,33 @@ int main(int argc, char const *argv[]){
             GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, app.renderViewport.width,app.renderViewport.height, 
             0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL
         );
+        glViewport(0,0, app.renderViewport.width, app.renderViewport.height);
 
         glBindFramebuffer(GL_FRAMEBUFFER, app.frameBuffer);
         {
-            ColorRGBAf col = app.sceneBackColor;
+            ColorRGBAf col = app.colorData[COLOR_DATA_BACKGROUND_COLOR];
             glClearColor(col.r, col.g, col.b, col.a);
         }  
+
+        glEnable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT |GL_DEPTH_BUFFER_BIT);
         glBindBuffer(GL_ARRAY_BUFFER, app.floorGridVbo);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,7* sizeof(float),(void*)0);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(1,4, GL_FLOAT, GL_FALSE,7 * sizeof(float),(void*)(sizeof(float) * 3));
         glEnableVertexAttribArray(1);
-        glUseProgram(app.gridShader);
-        glUniformMatrix4fv(glGetUniformLocation(app.gridShader,"uProjMat"),1,GL_FALSE, (float*)app.projMat);
-        glUniformMatrix4fv(glGetUniformLocation(app.gridShader,"uViewMat"),1,GL_FALSE, (float*)app.viewMat);
+        glUseProgram(app.shaderID[SHADER_ID_GRID_SHADER]);
+        glUniformMatrix4fv(glGetUniformLocation(app.shaderID[SHADER_ID_GRID_SHADER],"uProjMat"),1,GL_FALSE, (float*)app.projMat);
+        glUniformMatrix4fv(glGetUniformLocation(app.shaderID[SHADER_ID_GRID_SHADER],"uViewMat"),1,GL_FALSE, (float*)app.viewMat);
         glDrawArrays(GL_LINES,0, app.floorGridVertexCount);
         
         glBindBuffer(GL_ARRAY_BUFFER, app.voxelModelVertexBuffer);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.vertexModelIndexBuffer);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,7* sizeof(float),(void*)0);
         glEnableVertexAttribArray(0);
-        glUseProgram(app.voxelShader);
-        glUniformMatrix4fv(glGetUniformLocation(app.voxelShader,"uProjMat"),1,GL_FALSE, (float*)app.projMat);
-        glUniformMatrix4fv(glGetUniformLocation(app.voxelShader,"uViewMat"),1,GL_FALSE, (float*)app.viewMat);
+        glUseProgram(app.shaderID[SHADER_ID_VOXEL_SHADER]);
+        glUniformMatrix4fv(glGetUniformLocation(app.shaderID[SHADER_ID_VOXEL_SHADER],"uProjMat"),1,GL_FALSE, (float*)app.projMat);
+        glUniformMatrix4fv(glGetUniformLocation(app.shaderID[SHADER_ID_VOXEL_SHADER],"uViewMat"),1,GL_FALSE, (float*)app.viewMat);
         glDrawElements(GL_TRIANGLES, INDICIES_PER_CUBE * app.voxelCount, GL_UNSIGNED_INT, 0);
         
         glBindFramebuffer(GL_FRAMEBUFFER, 0);

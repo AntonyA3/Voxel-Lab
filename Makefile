@@ -7,8 +7,8 @@ LIBS = -lGL -lGLU -lGLEW -lglut -lglfw -lX11 -lXxf86vm -lXrandr -lpthread -lXi -
 %.o: $(SRCDIR)%.c
 	$(CC) $< -c $(CFLAGS)
 
-install: main.o cursor.o color.o grid.o orbit_camera.o app_viewport.o voxel.o ray.o
-	$(CC) -o bin/voxellab $(CFLAGS) main.o cursor.o color.o grid.o orbit_camera.o app_viewport.o voxel.o ray.o $(LIBS) 
+install: main.o cursor.o color.o grid.o orbit_camera.o app_viewport.o voxel.o ray.o aabb.o aabb_fact.o raycast.o 
+	$(CC) -o bin/voxellab $(CFLAGS) main.o cursor.o color.o grid.o orbit_camera.o app_viewport.o voxel.o ray.o aabb.o aabb_fact.o raycast.o  $(LIBS) 
 clean:
 	-rm *o bin/voxellab
 
