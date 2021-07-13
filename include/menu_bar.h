@@ -1,0 +1,3 @@
+
+
+enum menu_bar_item{MENU_BAR_ITEM_FILE, MENU_BAR_ITEM_EDIT, MENU_BAR_ITEM_COUNT};
