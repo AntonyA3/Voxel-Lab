@@ -1,0 +1,9 @@
+{
+    "makefile.extensionOutputFolder": "./.vscode",
+    "files.associations": {
+        "voxel.h": "c",
+        "aabb.h": "c",
+        "raycast.h": "c",
+        "menu_bar.h": "c"
+    }
+}

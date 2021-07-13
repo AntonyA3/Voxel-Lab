@@ -1,32 +1,19 @@
 CC=gcc
-CFLAGS = -I ./include -Wall -g
+CFLAGS = -I ./include ./linmath/linmath.h ./nuklear/nuklear.h -Wall -g
 SRCDIR = ./src/
-TESTDIR= ./test/
-DEPSDIR= ./include/
-_OBJDIR= obj/
-OBJDIR = ./objects/
-IMGUIDIR=./imgui
+
 LIBS = -lGL -lGLU -lGLEW -lglut -lglfw -lX11 -lXxf86vm -lXrandr -lpthread -lXi -lm
-main.o: $(SRCDIR)main.c 
-	$(CC) $< -c $(CFLAGS)
 
 %.o: $(SRCDIR)%.c
 	$(CC) $< -c $(CFLAGS)
 
-voxel_test.o: $(TESTDIR)voxel_test.c
-	$(CC) $< -c $(CFLAGS)
-
-voxellab: main.o camera.o grid.o voxel.o mouse.o
-	$(CC) -o bin/voxellab main.o camera.o grid.o voxel.o mouse.o $(CFLAGS) $(LIBS)
-
-buildtest: voxel_test.o voxel.o
-	$(CC)  -o bin/test voxel_test.o voxel.o mouse.o $(CFLAGS) $(LIBS) -ggdb
-
-runtest:
-	./bin/test
-
+install: main.o cursor.o color.o grid.o orbit_camera.o app_viewport.o voxel.o ray.o aabb.o aabb_fact.o raycast.o 
+	$(CC) -o bin/voxellab $(CFLAGS) main.o cursor.o color.o grid.o orbit_camera.o app_viewport.o voxel.o ray.o aabb.o aabb_fact.o raycast.o  $(LIBS) 
 clean:
-	-rm *o bin/*
+	-rm *o bin/voxellab
 
 run:
 	./bin/voxellab
+debug:
+	./bin/voxellab debug
+
