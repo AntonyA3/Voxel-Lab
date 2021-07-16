@@ -1,3 +1,6 @@
+#ifndef GRID_H
+#define GRID_H
+
 typedef struct GridVertex{
     float x, y, z;
     float r, g, b, a;
@@ -18,3 +21,4 @@ void set_j_vec_grid(Grid* grid, float x, float y, float z);
 int get_vertex_count(Grid grid);
 
 void init_grid_vertex(GridVertex* gridVertex, float x, float y, float z, float r, float g, float b, float a);
+#endif

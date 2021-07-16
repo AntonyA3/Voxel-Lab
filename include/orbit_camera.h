@@ -1,6 +1,9 @@
+#ifndef ORBIT_CAMERA_H
+#define ORBIT_CAMERA_H
 
 #include "linmath.h"
-
+#include "vector3.h"
+#include "vector4.h"
 enum orbit_cam_state{ORBIT_CAMERA_STATE_NOT_ORBITING, ORBIT_CAMERA_STATE_IS_ORBITING};
 typedef struct OrbitCamera
 {
@@ -30,3 +33,4 @@ void cameraOrbitEvent(OrbitCamera* camera, int buttonState, float dx, float dy);
 void orbitCameraPosition(OrbitCamera camera, vec3 position);
 void orbitCameraDoOrbit(OrbitCamera* orbitCam, float dx, float dy);
 */
+#endif

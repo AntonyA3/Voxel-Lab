@@ -1,279 +1,360 @@
 #include "../include/voxel.h"
 
-void init_voxel_children(Voxel* voxel){
+void voxel_set_children_to_null(Voxel* voxel){
     for(int i = 0; i < 8; i++){
-        voxel->children[i] = NULL;
+        voxel->child[i] = NULL;
     }
 }
-int is_leaf_voxel(Voxel voxel){
-    int nullCount = 0;
-    for(int i = 0; i < 8; i++){
-        nullCount += voxel.children[i] == NULL;
+
+Aabb voxel_to_aabb(Voxel voxel){
+    
+    Aabb aabb;
+    if(voxel.size == 1){
+        aabb.x = voxel.origin[0];
+        aabb.y = voxel.origin[1];
+        aabb.z = voxel.origin[2];
+        aabb.width = 1;
+        aabb.height = 1;
+        aabb.depth = 1;
+    }else{
+        int hs = voxel.size / 2;
+        aabb.x = voxel.origin[0] - hs;
+        aabb.y = voxel.origin[1] - hs;
+        aabb.z = voxel.origin[2] - hs;
+        aabb.width = voxel.origin[0] + hs;
+        aabb.height = voxel.origin[1] + hs;
+        aabb.depth = voxel.origin[2] + hs;
     }
-    return nullCount == 8;
+    return aabb;
     
 }
-int get_child_index_relative_to_origin(int origin[3] , int x, int y, int z){
-    int px = x >= origin[0];
-    int py = y >= origin[1];
-    int pz = z >= origin[2];
-    return (px << 2) + (py << 1) + pz;
-}
-void double_voxel_positive(Voxel* voxel){
-    voxel->size = voxel->size << 1;
-    VoxInt offset = voxel->size >> 1;
-    set_voxel_origin(voxel, offset, offset, offset);
-    
-}
 
-void double_voxel_negative(Voxel* voxel){
-    voxel->size = voxel->size << 1;
-    VoxInt offset = voxel->size >> 1;
-    set_voxel_origin(voxel, -offset, -offset, -offset);
-}
-
-int add_voxel_child_to_voxel_head(Voxel** voxel, VoxInt x, VoxInt y, VoxInt z){
-    if(*voxel == NULL){
-        *voxel = (Voxel*) malloc(sizeof(Voxel));
-        Voxel* voxelPointer = (*voxel);
-        init_voxel_children(voxelPointer);
-        voxelPointer->size = 2;
-        set_voxel_origin(voxelPointer, 1,1,1);
-        int growthCount = 0;
-        while (!is_inside_voxel(*voxelPointer, x, y, z) && growthCount < 100)
-        {
-            double_voxel_positive(voxelPointer);
-            growthCount++;
-        }
-        if(growthCount == 100){
-            return 0;
-            printf("error when adding voxel \n");
-        }
-        add_child_to_voxel_node(voxelPointer, x, y, z);
-        return 1;
-    }
-
-    int growthCount = 0;
-
-    while (!is_inside_voxel(**voxel, x, y, z) && growthCount < 100){        
-        Voxel* newHead = (Voxel*) malloc(sizeof(Voxel));
-        newHead->size = (*voxel)->size << 1;
-        newHead->origin[0] = newHead->size/2;
-        newHead->origin[1] = newHead->size/2;
-        newHead->origin[2] = newHead->size/2;
-        init_voxel_children(newHead);
-      
-        newHead->children[VOXEL_CORNER_MIN] = *voxel;
-        *voxel = newHead;
-        growthCount++;
-    }
-    if(growthCount == 100){
+int voxel_is_point_inside_model(Voxel *voxel, float x, float y, float z){
+    if(voxel == NULL){
         return 0;
-        printf("error when adding voxel \n");
+    }
+    Aabb voxBox = voxel_to_aabb(*voxel);
+    if(voxel_is_leaf(voxel)){
+        if(aabb_contains_point(voxBox, x, y, z)){
+            return 1;
+        }
+    }
+    if(aabb_contains_point(voxBox, x, y, z)){
+        for(int i = 0; i < 8; i++){
+            if(voxel->child[i] != NULL){
+                if(voxel_is_point_inside_model(voxel->child[i], x, y, z)){
+                    return 1;
+                }
+            }
+        }
     }
     
-    return add_child_to_voxel_node(*voxel, x, y, z);
-}
-
-
-int add_child_to_voxel_node(Voxel* voxel, VoxInt x, VoxInt y, VoxInt z){
-    int voxelOrigin[3];
-    int voxelSize = voxel->size;
-    memcpy(voxelOrigin, voxel->origin, sizeof(unsigned int) * 3);
-    int px = (x >= voxelOrigin[0]);
-    int py = (y >= voxelOrigin[1]);
-    int pz = (z >= voxelOrigin[2]);
-    int n = (px << 2) + (py << 1) + pz;
-
-    if(voxelSize == 2){
-        if(voxel->children[n] == NULL){
-            voxel->children[n] = (Voxel*) malloc(sizeof(Voxel));
-            init_voxel_children(voxel->children[n]);
-            set_voxel_origin(voxel->children[n], x, y, z);
-            voxel->children[n]->size = 1;
-            return 1;
-        }
-        return 0;       
-    }else{
-        if(voxel->children[n] == NULL){            
-            voxel->children[n] = (Voxel*) malloc(sizeof(Voxel));
-            init_voxel_children(voxel->children[n]);
-            voxel->children[n]->size = voxel->size /2;
-
-            int quarterSize = voxel->size / 4;
-
-            set_voxel_origin(voxel->children[n],
-                voxelOrigin[0] + px * quarterSize - (!px * quarterSize),
-                voxelOrigin[1] + py * quarterSize - (!py * quarterSize),
-                voxelOrigin[2] + pz * quarterSize - (!pz * quarterSize)
-            );
-        }
-        return add_child_to_voxel_node(voxel->children[n],x,y,z);
-    }
-}
-
-void set_voxel_origin(Voxel* voxel, VoxInt x, VoxInt y, VoxInt z){
-    voxel->origin[0] = x;
-    voxel->origin[1] = y;
-    voxel->origin[2] = z;
-}
-
-int remove_voxel_from_voxel_head(Voxel **head, VoxInt x, VoxInt y, VoxInt z){
-    Voxel* headVox = (*head);
-    if(headVox != NULL){
-        int pred = headVox->size == 1 && 
-            headVox->origin[0] == x &&
-            headVox->origin[1] == y &&
-            headVox->origin[2] == z;
-        if(pred){
-            free(headVox);
-            headVox = NULL;
-            return 1;
-        }else{
-            return remove_voxel_child_from_voxel(head,x,y,z);
-        }
-    }
     return 0;
 }
 
-void regenerate_voxel_children(Voxel *voxel){
-    for(int i = 0; i < 8; i++){
-        int px = (i < 4);
-        int py = (i==2) || (i==3) || (i==6) || (i==7);
-        int pz = (i==1) || (i==3) || (i==5) || (i==7);
-        voxel->children[i] = (Voxel*) malloc(sizeof(Voxel));
-        Voxel* child = voxel->children[i];
-        child->size = voxel->size >> 1;
-        child->origin[0] = voxel->origin[0];
-        child->origin[1] = voxel->origin[1];
-        child->origin[2] = voxel->origin[2];
-        if(child->size == 1){
-            child->origin[0] += (-1 * !px);
-            child->origin[1] += (-1 * !py);
-            child->origin[2] += (-1 * !pz);
+void voxel_vs_ray (Voxel *voxel, Ray ray, int *entityType, int *hit, int *side, float* hitDistance)
+{
+    if(voxel != NULL){
+        Aabb voxBox = voxel_to_aabb(*voxel);
+        if(voxel_is_leaf(voxel)){
+            int boxHit = *hit, boxSide;
+            float boxDistance = *hitDistance;
+            aabb_vs_ray(voxBox, ray, &boxHit, &boxSide, &boxDistance);
+            
+            if(boxHit){
+                if((boxDistance < (*hitDistance)) && (boxDistance > 0)){
+                    *hitDistance = boxDistance;
+                    *side = boxSide;
+                    *hit = 1;
+                    *entityType = ENTITY_TYPE_VOXEL_MODEL;       
+                }
+            }
         }else{
-            int quarterSize = voxel->size >> 2;
-            child->origin[0] += (quarterSize * px) + (-quarterSize * !px);
-            child->origin[1] += (quarterSize * py) + (-quarterSize * !py);
-            child->origin[2] += (quarterSize * pz) + (-quarterSize * !pz);
+            if(aabb_contains_point(voxBox, ray.x, ray.y, ray.z)){
+                for(int i = 0; i < 8; i++){
+                    if(voxel->child[i] != NULL){
+                        voxel_vs_ray(voxel->child[i], ray, entityType, hit, side, hitDistance);
+                    }
+                }
+            }else{
+                int boxHit = 0, boxSide;
+                float boxDistance;
+                aabb_vs_ray(voxBox, ray, &boxHit, &boxSide, &boxDistance);
+                if(boxHit){
+                    if((boxDistance < (*hitDistance)) && (boxDistance > 0)){
+                        for(int i = 0; i < 8; i++){
+                            if(voxel->child[i] != NULL){
+                                voxel_vs_ray(voxel->child[i], ray, entityType, hit, side, hitDistance);
+                            }
+                        }
+                    }
+                }
+            }
         }
-        init_voxel_children(child);
     }
 }
-int remove_voxel_child_from_voxel(Voxel **voxel, VoxInt x, VoxInt y, VoxInt z){
-    Voxel* voxelObj = (*voxel);
-    if(voxelObj->size == 2){  
-        if(is_leaf_voxel(*voxelObj)){                 
-            regenerate_voxel_children(voxelObj);
-        }
-        int px = x >= voxelObj->origin[0];
-        int py = y >= voxelObj->origin[1];
-        int pz = z >= voxelObj->origin[2]; 
-        int n = (px<<2) + (py<<1) + pz;
-        if(voxelObj->children[n] != NULL){
-            free(voxelObj->children[n]);
-            voxelObj->children[n] = NULL;
-         
-            if(is_leaf_voxel(*voxelObj)){
-                free(voxelObj);
-                voxelObj = NULL;
-            }
-            return 1;
-        }
-    }else{
-        int px = x >= voxelObj->origin[0];
-        int py = y >= voxelObj->origin[1];
-        int pz = z >= voxelObj->origin[2]; 
-        int n =  (px<<2) + (py<<1) + pz;
-        
-     
-        if(is_leaf_voxel(*voxelObj)){ 
-            for(int i = 0; i < 8; i++){ 
-                voxelObj->children[i] = (Voxel*) malloc(sizeof(Voxel));
-                voxelObj->children[i]->size = voxelObj->size / 2;
-                int quarterSize = voxelObj->size /4;
-                
-                voxelObj->children[i]->origin[0] = voxelObj->origin[0] + quarterSize*px + (-quarterSize*!px);
-                voxelObj->children[i]->origin[1] = voxelObj->origin[1] + quarterSize*py + (-quarterSize*!py);
-                voxelObj->children[i]->origin[2] = voxelObj->origin[2] + quarterSize*pz + (-quarterSize*!pz);
-                
-                init_voxel_children(voxelObj->children[i]);
-            }
 
-        }
-        if(voxelObj->children[n] != NULL){
-            remove_voxel_child_from_voxel(&voxelObj->children[n], x, y, z);
-            if(is_leaf_voxel(*voxelObj)){
-                free(voxelObj);
-                voxelObj = NULL;
-            }
-            return 1;
-        }
-
-    }
-    return 0;
-}
-
-int is_inside_voxel(Voxel voxel, VoxInt x, VoxInt y, VoxInt z){
-    int halfSize = voxel.size >> 1;
+int voxel_is_inside_larger_voxel(Voxel voxel, unsigned int x, unsigned int y, unsigned int z){
+    
+    int halfSize = voxel.size / 2;
     int minX = voxel.origin[0] - halfSize;
     int maxX = voxel.origin[0] + halfSize;
-    int minY = voxel.origin[0] - halfSize;
-    int maxY = voxel.origin[0] + halfSize;
-    int minZ = voxel.origin[0] - halfSize;
-    int maxZ = voxel.origin[0] + halfSize;
-   
-    return (x >= minX) && (x < maxX) &&
-        (y >= minY) && (y < maxY ) &&
+    int minY = voxel.origin[1] - halfSize;
+    int maxY = voxel.origin[1] + halfSize;
+    int minZ = voxel.origin[2] - halfSize;
+    int maxZ = voxel.origin[2] + halfSize;
+    return (x >= minX) && (x < maxX) && 
+        (y >= minY) && (y < maxY) && 
         (z >= minZ) && (z < maxZ);
-    
 }
 
-int count_voxels(Voxel *voxel){
+int voxel_is_leaf(Voxel *voxel){
+    if(voxel == NULL){
+        return 0;
+    }
     if(voxel->size == 1){
         return 1;
     }
-    if(is_leaf_voxel(*voxel)){
+    int nullcount = 0;
+    for(int i = 0; i < 8; i++){
+        nullcount += voxel->child[i] == NULL;
+    }
+    return (nullcount == 8);
+}
+
+void voxel_get_leaf_voxels(Voxel *voxel, Voxel **voxelArray, int *index){
+    if(voxel != NULL){
+        if(voxel_is_leaf(voxel)){
+            voxelArray[*index] = voxel;
+            (*index)+= 1;    
+        }else{
+            for(int i = 0; i < 8; i++){
+                if(voxel->child[i] != NULL){
+                    voxel_get_leaf_voxels(voxel->child[i], voxelArray, index);
+                }
+            }
+        }
+    }
+}
+
+int voxel_count_voxels(Voxel* voxel){
+    if(voxel == NULL){
+        return 0;
+    }
+
+    if(voxel_is_leaf(voxel)){
         return 1;
     }
-    int totalVoxelCount = 0;
+
+    int childCount = 0;
     for(int i = 0; i < 8; i++){
-        if(voxel->children[i] != NULL){
-            totalVoxelCount += count_voxels(voxel->children[i]);
+        if(voxel->child[i] != NULL){
+            childCount += voxel_count_voxels(voxel->child[i]);
         }
+    }
+    return childCount;
+}
+
+void voxel_add_voxel(Voxel** voxel, unsigned int x, unsigned int y, unsigned int z){
+    if(*voxel == NULL)
+    {
+        *voxel = (Voxel*) malloc(sizeof(Voxel));
+        (*voxel)->size = 1;
+        (*voxel)->origin[0] = 0;
+        (*voxel)->origin[1] = 0;
+        (*voxel)->origin[2] = 0; 
+        if((x + y + z) != 0 )
+        {
+            (*voxel)->size = 2;
+            (*voxel)->origin[0] = 1;
+            (*voxel)->origin[1] = 1;
+            (*voxel)->origin[2] = 1;
+
+            int i = 0;
+            while (!voxel_is_inside_larger_voxel(**voxel,x,y,z) && i < 100)  
+            {
+                (*voxel)->size = (*voxel)->size * 2;
+                (*voxel)->origin[0] = (*voxel)->origin[0] * 2;            
+                (*voxel)->origin[1] = (*voxel)->origin[1] * 2;
+                (*voxel)->origin[2] = (*voxel)->origin[2] * 2;
+            }
+            voxel_set_children_to_null(*voxel);
+            voxel_add_voxel(voxel, x, y, z);
+        }
+    }else
+    {
+        if((*voxel)->size == 1)
+        {
+            Voxel* newHead = (Voxel*) malloc(sizeof(Voxel));
+            newHead->size = 2;
+            newHead->origin[0] = 1;
+            newHead->origin[1] = 1;
+            newHead->origin[2] = 1;
+            voxel_set_children_to_null(newHead);
+            
+            newHead->child[0] = *voxel;
+            *voxel = newHead;
         
+        }
+        int i = 0;
+        while (!voxel_is_inside_larger_voxel(**voxel,x,y,z) && i < 100)
+        {
+            Voxel* newHead = (Voxel*) malloc(sizeof(Voxel));
+            newHead->size = (*voxel)->size * 2;
+            newHead->origin[0] = (*voxel)->origin[0] * 2;
+            newHead->origin[1] = (*voxel)->origin[1] * 2;
+            newHead->origin[2] = (*voxel)->origin[2] * 2;
+            voxel_set_children_to_null(newHead);   
+            
+            newHead->child[0] = *voxel;
+            *voxel = newHead;
+            i++;
+        }
+
+        int px, py, pz, n;  
+        px = x >= (*voxel)->origin[0];
+        py = y >= (*voxel)->origin[1];
+        pz = z >= (*voxel)->origin[2];
+        n = 4 * px + 2 * py + pz;
+    
+        if((*voxel)->size == 2)
+        {
+            if((*voxel)->child[n] == NULL)
+            {
+                (*voxel)->child[n] = (Voxel*) malloc(sizeof(Voxel));
+                (*voxel)->child[n]->size = 1;
+                (*voxel)->child[n]->origin[0] = x;
+                (*voxel)->child[n]->origin[1] = y;
+                (*voxel)->child[n]->origin[2] = z;
+                voxel_set_children_to_null((*voxel)->child[n]);
+            }
+            
+            int childcount = 0;
+            for(int i = 0; i < 8; i++){
+                childcount += (*voxel)->child[i] != NULL;
+            }
+            if(childcount == 8){
+                for(int i = 0; i < 8; i++){
+                    free((*voxel)->child[i]);
+                    (*voxel)->child[i] = NULL;
+                }
+            }
+           
+        }else
+        {
+            if((*voxel)->child[n] == NULL)
+            {
+                (*voxel)->child[n] = (Voxel*) malloc(sizeof(Voxel));
+                (*voxel)->child[n]->size = (*voxel)->size / 2;
+                int qs = (*voxel)->size / 4;
+                (*voxel)->child[n]->origin[0] = (*voxel)->origin[0] + (-!px * qs) + px * qs;
+                (*voxel)->child[n]->origin[1] = (*voxel)->origin[1] + (-!py * qs) + py * qs;
+                (*voxel)->child[n]->origin[2] = (*voxel)->origin[2] + (-!pz * qs) + pz * qs;
+                voxel_set_children_to_null((*voxel)->child[n]);
+            }
+            voxel_add_voxel(&((*voxel)->child[n]), x, y, z);
+
+            int childcount = 0;
+            for(int i = 0; i < 8; i++){
+                childcount += (*voxel)->child[i] != NULL;
+            }
+            if(childcount == 8){
+                int nullcount = 0;
+                for(int i = 0; i < 8; i++){
+                    for(int j = 0; j < 8; j++){
+                        nullcount += (*voxel)->child[i]->child[j] == NULL;
+                    }
+                }
+                if(nullcount == 64){
+                    for(int i = 0; i < 8; i++){
+                        free((*voxel)->child[i]);
+                        (*voxel)->child[i] = NULL;
+                    }
+                }
+            }
+            
+        } 
     }
-    return totalVoxelCount;
+
 }
 
-void get_leaf_voxels(Voxel* voxel,Voxel** leafList, int *index){
-    
-    if(voxel->size == 1){
-        leafList[*index] = voxel;
-        (*index)++;
-        return;
+void voxel_generate_cube(Voxel *voxel,int index, float *verts, unsigned int *elements)
+{
+    unsigned int e[36] = 
+    {
+        4,5,1, 4,1,0,
+        1,5,6, 1,6,2,
+        0,1,2, 0,2,3,
+        4,0,3, 4,3,7,
+        3,2,6, 3,6,7,
+        7,6,5, 7,5,4
+    };
+    int shift  = index * 8;
+    for(int i = 0; i < 36; i++)
+    {        
+        e[i] = e[i] + shift;
     }
- 
-    if(is_leaf_voxel(*voxel)){
-        leafList[*index] = voxel;
-        (*index)++;
-        return;
-    }
+    memcpy(elements, e, sizeof(unsigned int) * 36);
 
-    for(int i = 0; i < 8; i++){
-        if(voxel->children[i] != NULL){
-            get_leaf_voxels(voxel->children[i], leafList, index);
+    if(voxel->size == 1)
+    {
+        int x = voxel->origin[0];
+        int y = voxel->origin[1];
+        int z = voxel->origin[2];
+        float v[24] = {
+            x, y, z,
+            x, y + 1, z,
+            x + 1, y + 1, z,
+            x + 1, y, z,
+            x, y, z + 1,
+            x, y + 1, z + 1,
+            x + 1, y + 1, z + 1,
+            x + 1, y, z + 1
+        };
+        memcpy(verts, v, sizeof(float) * 24);
+    }else
+    {
+        int x = voxel->origin[0];
+        int y = voxel->origin[1];
+        int z = voxel->origin[2];
+        int hs = voxel->size / 2;
+        float v[24] = 
+        {
+            x - hs, y - hs, z - hs,
+            x - hs, y + hs, z - hs,
+            x + hs, y +  hs, z - hs,
+            x + hs, y - hs, z - hs,
+            x - hs, y - hs, z + hs,
+            x - hs, y + hs, z + hs,
+            x + hs, y + hs, z + hs,
+            x + hs, y - hs, z + hs
+        };
+        memcpy(verts, v, sizeof(float) * 24);
+    } 
+}
+
+void voxel_get_verticies_and_indicies(Voxel *voxel, float *vertexArray ,unsigned int *elementArray)
+{
+    
+    int voxelCount = voxel_count_voxels(voxel);
+    if(voxelCount > 0)
+    {    
+        Voxel *leafVoxels[voxelCount];
+        int index = 0;
+        voxel_get_leaf_voxels(voxel, leafVoxels, &index);          
+        int elementArrayIndex = 0;
+        int vertexArrayIndex = 0;
+
+        for(int i = 0; i < voxelCount; i++)
+        {
+            vertexArrayIndex = i * 24;
+            elementArrayIndex = i * 36;
+            float verts[24];
+            unsigned int elements[36];
+            voxel_generate_cube(leafVoxels[i], i, verts, elements);
+            memcpy(&vertexArray[vertexArrayIndex], verts, sizeof(float) * 24);
+            memcpy(&elementArray[elementArrayIndex], elements, sizeof(unsigned int) * 36);
+            
         }
     }
-
-}
-
-void init_voxel_vertex(VoxelVertex* voxelVertex, float x, float y, float z, float r, float g, float b, float a){
-    voxelVertex->x = x;
-    voxelVertex->y = y;
-    voxelVertex->z = z;
-    voxelVertex->r = r;
-    voxelVertex->g = g;
-    voxelVertex->b = b;
-    voxelVertex->a = a;
 }

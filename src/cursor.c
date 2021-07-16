@@ -21,12 +21,12 @@ int cursor_button_next_state(int state, int isDown){
     }
 }
 
-void get_norm_position_from_cursor(float *x, float *y, float cursorX, float cursorY, 
+void get_clip_position_from_cursor(float *x, float *y, float cursorX, float cursorY, 
     float viewportX, float viewportY, float viewportWidth, float viewportHeight){
         *x = 2* (cursorX - viewportX) / viewportWidth -1;
-        *y = -2 *(cursorY - viewportY) / viewportHeight + 1;
+        *y = (2 * (cursorY - viewportY) / viewportHeight - 1) * -1;
 }
-void get_3d_ray_from_norm_position(float *x, float *y, float *z, float *dx, float*dy, float*dz,
-    float npx, float npy, float inverseMat[4][4]){
+void get_3d_ray_from_clip_position(Ray *ray,
+    float npx, float npy, mat4x4 inverseMat){
 
 }

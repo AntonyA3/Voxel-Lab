@@ -1,0 +1,6 @@
+
+#ifndef ENTITY_TYPE_H
+#define ENTITY_TYPE_H
+enum entity_type{ENTITY_TYPE_NONE, ENTITY_TYPE_FLOOR, ENTITY_TYPE_VOXEL_MODEL};
+
+#endif

@@ -4,6 +4,19 @@
         "voxel.h": "c",
         "aabb.h": "c",
         "raycast.h": "c",
-        "menu_bar.h": "c"
+        "menu_bar.h": "c",
+        "primitive_fact.h": "c",
+        "prim_fact.h": "c",
+        "app.h": "c",
+        "glfw3.h": "c",
+        "orbit_camera.h": "c",
+        "grid.h": "c",
+        "nuklear.h": "c",
+        "nuklear_glfw_gl3.h": "c",
+        "nuklear_gui.h": "c",
+        "cursor.h": "c",
+        "ray.h": "c",
+        "vector3ui.h": "c",
+        "vector3.h": "c"
     }
 }
