@@ -175,8 +175,30 @@ void do_show_properties_panel(struct nk_context *ctx, App *app){
         if(nk_select_label(ctx, "deleteVox",NK_TEXT_ALIGN_LEFT, deleteVoxSelected)){
             app->voxelManipulationMode = VOXEL_EDIT_DELETE_VOXEL;
         }
+
+        nk_layout_row_static(ctx, 32, 32, 3);
+        int pointSelected = (app->voxelManipulationShape == VOXEL_SHAPE_POINT) ?
+            nk_true: nk_false;
+        if(nk_select_label(ctx, "point",NK_TEXT_ALIGN_LEFT, pointSelected)){
+            app->voxelManipulationShape = VOXEL_SHAPE_POINT;
+        }
+        
+        int boxSelected = (app->voxelManipulationShape == VOXEL_SHAPE_AABB) ?
+            nk_true: nk_false;
+        if(nk_select_label(ctx, "box",NK_TEXT_ALIGN_LEFT, boxSelected)){
+            app->voxelManipulationShape = VOXEL_SHAPE_AABB;
+        }
+
+        int sphereSelected = (app->voxelManipulationShape == VOXEL_SHAPE_SPHERE) ?
+            nk_true: nk_false;
+        if(nk_select_label(ctx, "sphere",NK_TEXT_ALIGN_LEFT, sphereSelected)){
+            app->voxelManipulationShape = VOXEL_SHAPE_SPHERE;
+        }
+
+
         nk_group_end(ctx);
     }
+
 }
 void do_show_render_panel(struct nk_context *ctx, App *app){
     nk_layout_row_push(ctx, app->renderPanelWidth);

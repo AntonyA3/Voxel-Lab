@@ -17,6 +17,7 @@
         "cursor.h": "c",
         "ray.h": "c",
         "vector3ui.h": "c",
-        "vector3.h": "c"
+        "vector3.h": "c",
+        "sphere.h": "c"
     }
 }

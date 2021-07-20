@@ -45,7 +45,9 @@ typedef struct App{
     int entityHit;
     int cameraInsideVoxel;
     int updateRequest;
-    int voxelManipulationMode;
+    int voxelManipulationMode, voxelManipulationShape;
+    Sphere sphereBrush;
+    Aabb boxBrush;
     ColorRGBAf sceneBackColor;
     AppViewport renderViewport, windowViewport;
     float menuBarHeight;

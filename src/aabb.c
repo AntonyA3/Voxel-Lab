@@ -1,5 +1,4 @@
 #include "../include/aabb.h"
-
 int aabb_contains_point(Aabb box, float x, float y, float z){
     int minX = box.x;
     int maxX = box.x + box.width;
@@ -83,4 +82,94 @@ void aabb_vs_ray(Aabb aabb, Ray ray, int *hit, int *side, float *hitDistance){
             }
         }
     }
+}
+void aabb_get_corners(Aabb aabb, vec3 corners[8]){
+    corners[0][0] = aabb.x;
+    corners[0][1] = aabb.y;
+    corners[0][2] = aabb.z;
+
+    corners[1][0] = aabb.x;
+    corners[1][1] = aabb.y + aabb.height;
+    corners[1][2] = aabb.z;
+
+    corners[2][0] = aabb.x + aabb.width;
+    corners[2][1] = aabb.y + aabb.height;
+    corners[2][2] = aabb.z;
+
+    corners[3][0] = aabb.x + aabb.width;
+    corners[3][1] = aabb.y;
+    corners[3][2] = aabb.z;
+
+    corners[4][0] = aabb.x;
+    corners[4][1] = aabb.y;
+    corners[4][2] = aabb.z + aabb.depth;
+
+    corners[5][0] = aabb.x;
+    corners[5][1] = aabb.y + aabb.height;
+    corners[5][2] = aabb.z + aabb.depth;
+
+    corners[6][0] = aabb.x + aabb.width;
+    corners[6][1] = aabb.y + aabb.height;
+    corners[6][2] = aabb.z + aabb.depth;
+
+    corners[7][0] = aabb.x + aabb.width;
+    corners[7][1] = aabb.y;
+    corners[7][2] = aabb.z + aabb.depth;
+
+}
+int aabb_inside_sphere(Aabb aabb, Sphere sphere){
+    vec3 corners[8];
+    int inCircleCount = 0;
+    for(int i = 0; i < 8; i++){
+        inCircleCount +=sphere_contains_point(sphere, 
+            corners[i][0], corners[i][1], corners[i][2]);
+    }
+    return (inCircleCount == 8);
+}
+
+int aabb_intersects_sphere_d(Aabb aabb, Sphere sphere, float d, vec3 circleToAabb){
+    float x, y, z;
+    vec3 sphereCentre = {sphere.x, sphere.y, sphere.z};
+    x = sphereCentre[0] + circleToAabb[0] * d;
+    y = sphereCentre[1] + circleToAabb[1] * d;
+    z = sphereCentre[2] + circleToAabb[2] * d;
+    if(sphere_contains_point(sphere,x,y,z)){
+        return 1;
+    }
+    return 0;
+}
+int aabb_intersects_sphere(Aabb aabb, Sphere sphere){
+    vec3 circleToAabb;
+    vec3 sphereCentre = {sphere.x, sphere.y, sphere.z};
+    vec3 aabbCentre = {aabb.x + aabb.width * 0.5,
+        aabb.y + aabb.height * 0.5,
+        aabb.z + aabb.depth * 0.5
+    };
+    float x, y, z;
+    vec3_sub(circleToAabb, aabbCentre, sphereCentre);
+    float dleft = (aabb.x - sphere.x) / circleToAabb[0];
+    if(aabb_intersects_sphere_d(aabb, sphere, dleft,  circleToAabb)){
+        return 1;
+    }
+    float dright = (aabb.x + aabb.width - sphere.x) / circleToAabb[0];
+    if(aabb_intersects_sphere_d(aabb, sphere, dright,  circleToAabb)){
+        return 1;
+    }
+    float dbottom = (aabb.y - sphere.y) / circleToAabb[1];
+    if(aabb_intersects_sphere_d(aabb, sphere, dbottom,  circleToAabb)){
+        return 1;
+    }
+    float dtop = (aabb.y + aabb.height - sphere.y) / circleToAabb[1];
+    if(aabb_intersects_sphere_d(aabb, sphere, dtop,  circleToAabb)){
+        return 1;
+    }
+    float dfront = (aabb.z - sphere.z) / circleToAabb[2];
+    if(aabb_intersects_sphere_d(aabb, sphere, dfront,  circleToAabb)){
+        return 1;
+    }
+    float dback = (aabb.z + aabb.depth - sphere.z) / circleToAabb[2];
+    if(aabb_intersects_sphere_d(aabb, sphere, dback,  circleToAabb)){
+        return 1;
+    }
+    return 0;
 }

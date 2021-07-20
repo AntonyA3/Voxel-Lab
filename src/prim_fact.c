@@ -81,3 +81,36 @@ void generate_cube_from_line(vec3 start, vec3 end, float thickness, Vertex* vert
     memcpy(vertexArray, model, 8 * sizeof(Vertex));
     memcpy(elementArray, elements, 36 * sizeof(unsigned int));
 }
+
+void generate_sphere_model(Sphere sphere, int latitudeSegments, int longitudeSegments, 
+Vertex* vertexArray, unsigned int *elementArray){
+    int vertcount = (latitudeSegments + 1) * (longitudeSegments + 1);
+    float verts[vertcount][3];
+    int longIncrements =  180 / longitudeSegments;
+    int latIncrements = 360 / latitudeSegments;
+    int index = 0;
+    for(int i = -90; i <= 90; i += longIncrements){
+        for (int j = -180; j <= 180; j+= latIncrements){
+            float yaw = j / 180 * M_1_PI;
+            float pitch = i / 180 * M_1_PI;
+            mat4x4 yawMat, pitchMat;
+            vec3 v = {1,0,0,1};
+            mat4x4_identity(yawMat);
+            mat4x4_rotate_Y(yawMat, yawMat, yaw);
+
+            mat4x4_identity(pitchMat);
+            mat4x4_rotate_X(pitchMat, pitchMat, pitch);
+            
+            mat4x4_mul_vec4(v, yawMat, v);
+            mat4x4_mul_vec4(v, pitchMat, v);
+            verts[index][0] = v[0];
+            verts[index][1] = v[1];
+            verts[index][2] = v[2];
+            index++;
+        }
+    }
+    memcpy(vertexArray, verts, sizeof(Vertex) * vertcount);
+
+    
+}
+    

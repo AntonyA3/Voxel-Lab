@@ -5,6 +5,7 @@
 #include "../include/vector3ui.h"
 #include "../include/ray.h"
 #include "../include/aabb.h"
+#include "../include/sphere.h"
 #include "../include/vector3.h"
 #include "../include/entity_type.h"
 
@@ -24,4 +25,10 @@ void voxel_get_verticies_and_indicies(Voxel* voxel, float *vertexArray ,unsigned
 void voxel_generate_cube(Voxel *voxel,int index, float *verts, unsigned int *elements);
 void voxel_vs_ray (Voxel *voxel, Ray ray, int *entityType, int *hit, int *side, float *hitDistance);
 int voxel_is_point_inside_model(Voxel *voxel, float x, float y, float z);
+void voxel_delete_voxel_do(Voxel** voxel, unsigned int x, unsigned int y, unsigned int z);
+void voxel_delete_voxel(Voxel** voxel, unsigned int x, unsigned int y, unsigned int z);
+void voxel_compress_voxel(Voxel** voxel);
+int voxel_intersects_sphere(Voxel voxel, Sphere sphere);
+void voxel_add_voxel_from_sphere(Voxel** voxel, Sphere sphere);
+
 #endif

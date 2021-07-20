@@ -47,6 +47,8 @@
 #include "../include/app.h"
 #include "../include/shader_resource.h"
 #include "../include/voxel.h"
+#include "../include/add_voxel_shape.h"
+#include "../include/sphere.h"
 
 enum app_cursor_focus{APP_CURSOR_FOCUS_GUI,APP_CURSOR_FOCUS_RENDER_VIEWPORT, APP_CURSOR_FOCUS_OUTSIDE_WINDOW};
 
@@ -110,6 +112,58 @@ void do_update_cursor_with_glfw(App *app, GLFWwindow* window){
     app->cursor.position.y = y;
 }
 
+void  do_set_hitpoint_voxel_model(App* app, Vector3 *hitpoint){
+    switch (app->voxelManipulationMode)
+    {
+    case VOXEL_EDIT_ADD_VOXEL:
+        switch (app->cursor.sideHit)
+        {
+        case BOX_SIDE_LEFT:
+            hitpoint->x = round(hitpoint->x) - 1;
+            break;
+        case BOX_SIDE_RIGHT:
+            hitpoint->x = round(hitpoint->x);
+            break;
+        case BOX_SIDE_BOTTOM:
+            hitpoint->y = round(hitpoint->y) - 1;
+            break;
+        case BOX_SIDE_TOP:
+            hitpoint->y = round(hitpoint->y);
+            break;
+        case BOX_SIDE_FRONT:
+            hitpoint->z = round(hitpoint->z) - 1;
+            break;
+        case BOX_SIDE_BACK:
+            hitpoint->z = round(hitpoint->z);
+            break;
+        }
+        break;
+    
+    case VOXEL_EDIT_DELETE_VOXEL:
+        switch (app->cursor.sideHit)
+        {
+        case BOX_SIDE_LEFT:
+            hitpoint->x = round(hitpoint->x);
+            break;
+        case BOX_SIDE_RIGHT:
+            hitpoint->x = round(hitpoint->x)  -1;
+            break;
+        case BOX_SIDE_BOTTOM:
+            hitpoint->y = round(hitpoint->y);
+            break;
+        case BOX_SIDE_TOP:
+            hitpoint->y = round(hitpoint->y) -1;
+            break;
+        case BOX_SIDE_FRONT:
+            hitpoint->z = round(hitpoint->z);
+            break;
+        case BOX_SIDE_BACK:
+            hitpoint->z = round(hitpoint->z) - 1 ;
+            break;
+        }
+        break;
+    }
+}
 
 void do_update_frame_buffer(App *app){
 
@@ -158,10 +212,9 @@ int main(int argc, char const *argv[]){
     unsigned int* voxelModelElementArray = (unsigned int*) malloc(sizeof(unsigned int));
     GLuint voxelModelVertexBuffer, voxelModelElementBuffer;
 
-
-
-
-
+    float* sphereModelVertexArray = (float*) malloc(sizeof(float));
+    unsigned int* sphereModelElementArray = (unsigned int*) malloc(sizeof(unsigned int));
+    GLuint sphereModelVertexBuffer, sphereModelElementBuffer;
 
     init_globals(&appGlobals);
     app.appMode = APP_MODE_DEFAULT;
@@ -200,7 +253,7 @@ int main(int argc, char const *argv[]){
 
     {
         vec3 pos= {0,0,0};
-        init_orbit_camera(&app.orbitCamera, pos, M_PI/4, -3*M_PI/4,M_PI/2,1.0,100.0,app.renderViewport.ratio,10.0);
+        init_orbit_camera(&app.orbitCamera, pos, M_PI/4, -3*M_PI/4,M_PI/2,1.0,10000.0,app.renderViewport.ratio,10.0);
     }
 
     if (glewInit() != GLEW_OK) {
@@ -317,6 +370,15 @@ int main(int argc, char const *argv[]){
     glGenBuffers(1, &rayhitElementBuffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, rayhitElementBuffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    /*Generate Sphere Model Vertex*/
+    glGenBuffers(1, &sphereModelVertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, sphereModelVertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glGenBuffers(1, &sphereModelElementBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, sphereModelElementBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glGenFramebuffers(1, &app.frameBuffer);
     glGenTextures(1, &app.frameTexture);
@@ -441,6 +503,7 @@ int main(int argc, char const *argv[]){
         }
 
         if(app.appMode == APP_MODE_DEBUG){
+            /*Generear the Ray hit model*/
             vec3 halfExtents = {0.1, 0.1, 0.1};
             generate_cube_from_centre(app.cursor.hitPosition.vec, halfExtents, rayhitModelVertexArray, rayhitModelElementArray);
             glBindBuffer(GL_ARRAY_BUFFER, rayhitVertexBuffer);
@@ -449,67 +512,112 @@ int main(int argc, char const *argv[]){
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, rayhitElementBuffer);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(unsigned int) , rayhitModelElementArray, GL_DYNAMIC_DRAW);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+            /*generate sphere model*/
+            /*
+            generate_sphere_model(app.sphereBrush, 6, 6, sphereModelVertexArray, sphereModelElementArray);
+            glBindBuffer(GL_ARRAY_BUFFER, sphereModelVertexBuffer);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(float), sphereModelVertexArray, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereModelElementBuffer);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int), sphereModelElementArray, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);*/
         }
+
 
         if(app.cursorButtonState[CURSOR_BUTTON_LEFT] == CURSOR_BUTTON_STATE_PRESSED)
         {
             Vector3 hp = app.cursor.hitPosition;
-            if(app.entityHit == ENTITY_TYPE_VOXEL_MODEL){                
-                switch (app.cursor.sideHit)
+
+            if(app.entityHit == ENTITY_TYPE_VOXEL_MODEL){ 
+                do_set_hitpoint_voxel_model(&app, &hp);               
+            }
+            printf("hp calculation %f, %f, %f\n", hp.x, hp.y, hp.z);
+            if((hp.x >= 0) && (hp.y >= 0) && (hp.z >= 0)){
+                unsigned int vx,vy,vz;
+                vx = (unsigned int) hp.x;
+                vy = (unsigned int) hp.y;
+                vz = (unsigned int) hp.z;
+                printf("voxel mode %d\n",app.voxelManipulationMode);
+
+                switch (app.voxelManipulationMode)
                 {
-                case BOX_SIDE_LEFT:
-                    hp.x = round(hp.x) - 1;
+                case VOXEL_EDIT_ADD_VOXEL:
+                    printf("add voxel \n");
+
+                    printf("shapae is %d\n",app.voxelManipulationShape);
+                    switch (app.voxelManipulationShape)
+                    {
+                    case VOXEL_SHAPE_POINT:
+                        voxel_add_voxel(&app.voxelHead, vx, vy, vz);
+                        break;
+                    case VOXEL_SHAPE_SPHERE:
+                        {
+                        printf("add voxel from sphere \n");
+                        Sphere sphere;
+                        sphere.r = 16.0f;
+                        sphere.x = (float)(vx + 0.5f);
+                        sphere.y = (float)(vy + 0.5f);
+                        sphere.z = (float)(vz + 0.5f);
+                        voxel_add_voxel_from_sphere(&app.voxelHead,sphere);
+                        }
+                        break;
+                    case VOXEL_SHAPE_AABB:
+                        //voxel_add_voxel_from_aabb(&app.voxelHead, vx, vy, vz);
+                        break;
+                    }
+                    printf("voxel added to location %u, %u, %u \n", vx, vy, vz);
+                    printf("voxel head size %u\n", app.voxelHead->size);
+                    printf("voxel count %d\n", voxel_count_voxels(app.voxelHead));
                     break;
-                case BOX_SIDE_RIGHT:
-                    hp.x = round(hp.x);
+                
+                case VOXEL_EDIT_DELETE_VOXEL:
+                    switch (app.voxelManipulationShape)
+                    {
+                    case VOXEL_SHAPE_POINT:
+                        voxel_delete_voxel(&app.voxelHead, vx, vy, vz);
+                        break;
+                    case VOXEL_SHAPE_SPHERE:
+                        {
+                        Sphere sphere;
+                        sphere.x = (float)(vx + 0.5f);
+                        sphere.y = (float)(vy + 0.5f);
+                        sphere.z = (float)(vz + 0.5f);
+                        sphere.r = 20;
+                        }
+                        //voxel_delete_voxel_from_sphere(&app.voxelHead, vx, vy, vz);
+                        break;
+                    case VOXEL_SHAPE_AABB:
+                        //voxel_delete_voxel_from_aabb(&app.voxelHead, vx, vy, vz);
+
+                        break;
+                    }
                     break;
-                case BOX_SIDE_BOTTOM:
-                    hp.y = round(hp.y) - 1;
-                    break;
-                case BOX_SIDE_TOP:
-                    hp.y = round(hp.y);
-                    break;
-                case BOX_SIDE_FRONT:
-                    hp.z = round(hp.z) - 1;
-                    break;
-                case BOX_SIDE_BACK:
-                    hp.z = round(hp.z) ;
-                    break;
-            
                 }
             }
-            if(hp.x >=0 && hp.y >= 0 && hp.z >= 0){
-                unsigned int vx = (unsigned int) hp.x;
-                unsigned int vy = (unsigned int) hp.y;
-                unsigned int vz = (unsigned int) hp.z;
-                voxel_add_voxel(&app.voxelHead, vx, vy, vz);
-                printf("voxel added to location %u, %u, %u \n", vx, vy, vz);
-                printf("voxel head size %u\n", app.voxelHead->size);
-                printf("voxel count %d\n", voxel_count_voxels(app.voxelHead));
-            }
+
             if(app.appMode == APP_MODE_DEBUG){
                 int voxelCount = voxel_count_voxels(app.voxelHead);
                 voxelModelVertexArray = realloc(voxelModelVertexArray, voxelCount * 24 * sizeof(float));
                 voxelModelElementArray = realloc(voxelModelElementArray, voxelCount * 36 * sizeof(unsigned int)) ;
                 voxel_get_verticies_and_indicies(app.voxelHead, voxelModelVertexArray, voxelModelElementArray);
-                
-                /*set mocel buffer data*/
-                glBindBuffer(GL_ARRAY_BUFFER, voxelModelVertexBuffer);
-                glBufferData(GL_ARRAY_BUFFER, voxelCount * 24 * sizeof(float) , voxelModelVertexArray, GL_DYNAMIC_DRAW);
-                glBindBuffer(GL_ARRAY_BUFFER, 0);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelModelElementBuffer);
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, voxelCount * 36 * sizeof(unsigned int) , voxelModelElementArray, GL_DYNAMIC_DRAW);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+                if(voxelCount != 0){
+                    /*set model buffer data*/
+                    glBindBuffer(GL_ARRAY_BUFFER, voxelModelVertexBuffer);
+                    glBufferData(GL_ARRAY_BUFFER, voxelCount * 24 * sizeof(float) , voxelModelVertexArray, GL_DYNAMIC_DRAW);
+                    glBindBuffer(GL_ARRAY_BUFFER, 0);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelModelElementBuffer);
+                    glBufferData(GL_ELEMENT_ARRAY_BUFFER, voxelCount * 36 * sizeof(unsigned int) , voxelModelElementArray, GL_DYNAMIC_DRAW);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-                /*set model head data*/
-                voxel_generate_cube(app.voxelHead,0,voxelHeadVertexArray, voxelHeadElementArray);
-                glBindBuffer(GL_ARRAY_BUFFER, voxelHeadVertexBuffer);
-                glBufferData(GL_ARRAY_BUFFER,  24 * sizeof(float) , voxelHeadVertexArray, GL_DYNAMIC_DRAW);
-                glBindBuffer(GL_ARRAY_BUFFER, 0);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelHeadElementBuffer);
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(unsigned int) , voxelHeadElementArray, GL_DYNAMIC_DRAW);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-                
+                    /*set model head data*/
+                    voxel_generate_cube(app.voxelHead,0,voxelHeadVertexArray, voxelHeadElementArray);
+                    glBindBuffer(GL_ARRAY_BUFFER, voxelHeadVertexBuffer);
+                    glBufferData(GL_ARRAY_BUFFER,  24 * sizeof(float) , voxelHeadVertexArray, GL_DYNAMIC_DRAW);
+                    glBindBuffer(GL_ARRAY_BUFFER, 0);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelHeadElementBuffer);
+                    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36 * sizeof(unsigned int) , voxelHeadElementArray, GL_DYNAMIC_DRAW);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+                }
                 
             }
         }
@@ -533,27 +641,27 @@ int main(int argc, char const *argv[]){
             glUniformMatrix4fv(glGetUniformLocation(app.shaderId[SHADER_ID_PRIM_SHADER],"uProjMat"),1,GL_FALSE, (float*)app.projMat);
             glUniformMatrix4fv(glGetUniformLocation(app.shaderId[SHADER_ID_PRIM_SHADER],"uViewMat"),1,GL_FALSE, (float*)app.viewMat);
             glUniform3f(glGetUniformLocation(app.shaderId[SHADER_ID_PRIM_SHADER],"uColor"),0.0,1.0,0.0);
+            if(voxelCount != 0){
+                glBindBuffer(GL_ARRAY_BUFFER, voxelModelVertexBuffer);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelModelElementBuffer);
+                glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3* sizeof(float),(void*)0);
+                glEnableVertexAttribArray(0);
+                glDrawElements(GL_TRIANGLES, voxelCount * 36, GL_UNSIGNED_INT, 0);
 
-            glBindBuffer(GL_ARRAY_BUFFER, voxelModelVertexBuffer);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelModelElementBuffer);
-            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3* sizeof(float),(void*)0);
-            glEnableVertexAttribArray(0);
-            glDrawElements(GL_TRIANGLES, voxelCount * 36, GL_UNSIGNED_INT, 0);
-
-            glUniform3f(glGetUniformLocation(app.shaderId[SHADER_ID_PRIM_SHADER],"uColor"),1.0,0.0,1.0);
-            glBindBuffer(GL_ARRAY_BUFFER, voxelHeadVertexBuffer);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelHeadElementBuffer);
-            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3* sizeof(float),(void*)0);
-            glEnableVertexAttribArray(0);
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
+                glUniform3f(glGetUniformLocation(app.shaderId[SHADER_ID_PRIM_SHADER],"uColor"),1.0,0.0,1.0);
+                glBindBuffer(GL_ARRAY_BUFFER, voxelHeadVertexBuffer);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, voxelHeadElementBuffer);
+                glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3* sizeof(float),(void*)0);
+                glEnableVertexAttribArray(0);
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+            }
             glUniform3f(glGetUniformLocation(app.shaderId[SHADER_ID_PRIM_SHADER],"uColor"),0.0,1.0,1.0);
             glBindBuffer(GL_ARRAY_BUFFER, rayhitVertexBuffer);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, rayhitElementBuffer);
             glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3* sizeof(float),(void*)0);
             glEnableVertexAttribArray(0);
             glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
+            
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
         

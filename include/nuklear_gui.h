@@ -7,7 +7,7 @@
 #endif
 
 #include "../include/app.h"
-
+#include "add_voxel_shape.h"
 void do_show_cursor_debug(struct nk_context *ctx, App app);
 void do_show_orbit_camera_debug(struct nk_context *ctx, App app);
 void do_show_floor_grid_debug(struct nk_context *ctx, App app);

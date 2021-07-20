@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "linmath.h"
-
+#include "../include/sphere.h"
 typedef struct Vertex{
     float x,y,z;
 }Vertex;
 
 void generate_cube_from_centre(vec3 center, vec3 halfExtents,  Vertex* vertexArray, unsigned int *elementArray);
 void generate_cube_from_line(vec3 start, vec3 end, float thickness, 
+    Vertex* vertexArray, unsigned int *elementArray);
+void generate_sphere_model(Sphere sphere, int latitudeSegments, int longitudeSegments, 
     Vertex* vertexArray, unsigned int *elementArray);
 #endif
