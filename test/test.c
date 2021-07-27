@@ -1,50 +1,70 @@
-#include <stdlib.h>
 #include <stdio.h>
-#include "linmath.h"
-#include "../include/prim_fact.h"
-#include "../include/ray.h"
+#include <stdlib.h>
+#include "../include/linmath.h"
+#include "../include/aabb.h"
+#include "../include/voxel_model.h"
+#include "../include/voxel.h"
 
-#define RAY_UNION_EXAMPLE
+void aabb_overlap_test(){
+    
+    Aabb aabb1 = {0, 0, 0, 10, 10, 10};
+    Aabb aabb2 = {-5,3,3,10,10,10};
+    vec3 overlap;
+    aabb_get_overlaping_area(aabb1, aabb2, overlap);
 
-void test_cube_generator(){
-    vec3 start = {0,0,-10};
-    vec3 end = {0,0,100};
-    Vertex boxVertex[8];
-    unsigned int boxElements[36];
-    generate_cube_from_line(start, end, 1, boxVertex, boxElements);
+    printf("overlap test %f %f %f\n", overlap[0], overlap[1], overlap[2]);    
+}
+
+void test_aabb_box_subtract(){
+    Aabb box = {2,2,2,4,4,4};
+    Aabb subBox = aabb_get_box_with_subtracted_corners(box, 0.1);
+}
+
+void test_aabb_from_voxel_child(){
+    Voxel voxel;
+    voxel.origin[0] = 16;
+    voxel.origin[1] = 16;
+    voxel.origin[2] = 16;
+    voxel.size = 32;
+    
+    Aabb voxbox = voxel_to_aabb_from_child_i(voxel, 0);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+    voxbox = voxel_to_aabb_from_child_i(voxel, 1);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+    voxbox = voxel_to_aabb_from_child_i(voxel, 2);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+    voxbox = voxel_to_aabb_from_child_i(voxel, 3);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+    voxbox = voxel_to_aabb_from_child_i(voxel, 4);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+    voxbox = voxel_to_aabb_from_child_i(voxel, 5);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+    voxbox = voxel_to_aabb_from_child_i(voxel, 6);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+    voxbox = voxel_to_aabb_from_child_i(voxel, 7);
+    printf ("voxbox, %f, %f, %f, %f, %f, %f\n", voxbox.x, voxbox.y, voxbox.z, voxbox.w, voxbox.h, voxbox.d);
+  
+
+
+}
+
+
+void test_aabb_get_corners(){
+    Aabb box = {2,2,2,4,4,4};
+    vec3 corners[8];
+    aabb_get_box_corners(box, corners);
 
     for(int i = 0; i < 8; i++){
-        Vertex vertex = boxVertex[i];
-        printf("vertex index: i: %d x: %f, y: %f, z: %f\n", i, vertex.x, vertex.y, vertex.z);
-        
+        printf("corner %f %f %f\n", corners[i][0], corners[i][1], corners[i][2]);
     }
-    
-}
-
-void test_ray_union(){
-    Ray ray; 
-    init_ray(&ray, 5,5,5,1,1,1);
-
-    printf("from ray.ray x: %f, y: %f, z: %f, dx: %f, dy: %f, dz: %f\n",  
-        ray.ray[0], ray.ray[1], ray.ray[2], ray.ray[3], ray.ray[4], ray.ray[5]);
-    printf("from ray.xyzdxdydz  x: %f, y: %f, z: %f, dx: %f, dy: %f, dz: %f\n",
-    ray.x, ray.y, ray.z, ray.dx, ray.dy, ray.dz);
-    printf("from ray.origin/dir  x: %f, y: %f, z: %f, dx: %f, dy: %f, dz: %f\n",
-        ray.origin[0], ray.origin[1], ray.origin[2], 
-        ray.direction[0], ray.direction[1], ray.direction[2]
-    );
-    printf("\nevaluate example\n");
 
 
 }
-
 int main(int argc, char const *argv[])
 {
-    #ifdef TEST_CUBE_GENERATOR
-        test_cube_generator();
-    #endif
-    #ifdef RAY_UNION_EXAMPLE
-        test_ray_union();
-    #endif
+    //aabb_overlap_test();
+    //test_aabb_from_voxel_child();
+    //test_aabb_get_corners();
+    test_aabb_box_subtract();
     return 0;
 }

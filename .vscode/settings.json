@@ -18,6 +18,8 @@
         "ray.h": "c",
         "vector3ui.h": "c",
         "vector3.h": "c",
-        "sphere.h": "c"
+        "sphere.h": "c",
+        "shader_program_id.h": "c",
+        "number_functions.h": "c"
     }
 }

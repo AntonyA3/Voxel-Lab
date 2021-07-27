@@ -25,9 +25,10 @@ run:
 debug:
 	./bin/voxellab debug
 
-testbuild: test.o prim_fact.o ray.o
-	$(CC) -o bin/test $(CFLAGS) test.o prim_fact.o ray.o $(LIBS) 
-	
+
+buildtest: test.o
+	$(CC) -o bin/test $(CFLAGS) test.o aabb.o voxel_model.o voxel.o box_generator.o sphere.o $(LIBS) 
+
 runtest:
 	./bin/test
 

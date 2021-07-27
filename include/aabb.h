@@ -1,18 +1,20 @@
 #ifndef AABB_H
 #define AABB_H
-#include "vector3.h"
-#include "ray.h"
-#include "../include/sphere.h"
-
-
-enum box_sides{BOX_SIDE_LEFT, BOX_SIDE_RIGHT, BOX_SIDE_BOTTOM, BOX_SIDE_TOP, BOX_SIDE_FRONT, BOX_SIDE_BACK};
-
-typedef struct Aabb{
-    float x, y, z, width, height,depth;
+#include "../include/linmath.h"
+#include "../include/number_functions.h"
+typedef struct
+{
+    float x, y, z, w, h, d;
 }Aabb;
 
-int aabb_contains_point(Aabb box, float x, float y, float z);
-void aabb_vs_ray(Aabb aabb, Ray ray, int *hit, int *side, float *hitDistance);
-int aabb_inside_sphere(Aabb aabb, Sphere sphere);
-int aabb_intersects_sphere(Aabb aabb, Sphere sphere);
+void aabb_get_centre(Aabb aabb, vec3 centre);
+void aabb_get_max_corner(Aabb aabb, vec3 point);
+void aabb_get_overlaping_area(Aabb aabb1, Aabb aabb2, vec3 overlap);
+void aabb_get_box_corners(Aabb aabb, vec3 corners[8]);
+int aabb_contains_point(Aabb aabb, float x, float y, float z);
+int aabb_contains_point_inclusive(Aabb aabb, float x, float y, float z);
+int aabb_contains_aabb(Aabb aabbContainer, Aabb aabb);
+
+Aabb aabb_get_box_with_subtracted_corners(Aabb aabb, float subtraction);
+
 #endif
