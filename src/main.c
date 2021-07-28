@@ -35,9 +35,10 @@
 #include "../include/element_buffer_id.h"
 #include "../include/shader_program_id.h"
 #include "../include/ray_hit_entity.h"
-
 #include "../include/aabb_side.h"
-
+#include "../include/cursor_panel_focus.h"
+#include "../include/voxel_editor_shape_id.h"
+#include "../include/voxel_edit_mode_id.h"
 typedef struct {
     float scrollY;
 }GlobalVars;
@@ -100,13 +101,13 @@ int main(int argc, char const *argv[])
     app.backgroundColor.b = 0.5f;
     app.backgroundColor.a = 1.0f;
 
+
     app_update_window_glfw(&app, window);
     app.menuBarHeight = 32;
     app.propertySelectorWidth = 32;
     app.propertyWidth = 128;
 
-    app.appViewWidth = app.windowWidth - app.propertyWidth - app.propertySelectorWidth;
-    app.appViewHeight = app.windowHeight - 32;
+    app_update_app_view(&app);
 
     app.camera.far = 1000.0;
     app.camera.near = 1.0;
@@ -163,28 +164,32 @@ int main(int argc, char const *argv[])
 
 
     //Generate Frame buffer texture
-    
-    glGenTextures(TEXTURE_ID_COUNT, app.textureId);
-
-    glBindTexture(GL_TEXTURE_2D, app.textureId[TEXTURE_ID_APP_VIEW_TEXTURE]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    
-    //initialise Frame Buffer
     glGenFramebuffers(FRAME_BUFFER_ID_COUNT, app.frameBufferId);
-    glBindFramebuffer(GL_FRAMEBUFFER, app.frameBufferId[FRAME_BUFFER_ID_APP_VIEW]);
-    /*glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0,
-        GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL
-    );*/
-    //glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, app.textureId[TEXTURE_ID_APP_VIEW_TEXTURE]);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, app.textureId[TEXTURE_ID_APP_VIEW_TEXTURE], 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glfwSetScrollCallback(window, scroll_callback);
+    glGenTextures(TEXTURE_ID_COUNT, app.textureId);
+    app_update_app_view_frame(&app);
 
+    glfwSetScrollCallback(window, scroll_callback);
+    app.cursorPanelFocus = CURSOR_PANEL_FOCUS_GUI;
+    app.voxelEditorShapeId = VOXEL_EDITOR_SHAPE_ID_POINT;
+    app.voxelEditModeId = VOXEL_EDIT_MODE_ID_ADD;
+    for(int i = 0; i < 4; i++){
+        for(int j = 0; j < 4; j++){
+            for(int k = 0; k < 4; k++){
+                voxel_model_add_voxel(&app.voxelModel, i, j, k);
+            }
+        }
+    }
     while (!glfwWindowShouldClose(window)){
         app_update_window_glfw(&app, window);
+        app_update_app_view(&app);
+        app_update_app_view_frame(&app);
+
         app_update_cursor_glfw(&app, window);
+        {       
+            int cursorInRect = rect_contains_point(app.appViewRect, app.cursor.x, app.cursor.y); 
+            app.cursorPanelFocus = CURSOR_PANEL_FOCUS_GUI * !cursorInRect + CURSOR_PANEL_FOCUS_APP_VIEW * cursorInRect;
+        }
+
         app.cursorButtonDown[CURSOR_BUTTON_ID_PRIMARY] = glfwGetMouseButton(window,GLFW_MOUSE_BUTTON_1) == GLFW_PRESS;
         app.cursorButtonDown[CURSOR_BUTTON_ID_SECONDARY] = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS;
         
@@ -196,9 +201,14 @@ int main(int argc, char const *argv[])
             app.cursorButtonState[CURSOR_BUTTON_ID_SECONDARY], app.cursorButtonDown[CURSOR_BUTTON_ID_SECONDARY]
         );
 
+        app.appViewCursorX = app.cursor.x - app.appViewRect.x;
+        app.appViewCursorY = app.cursor.y - app.appViewRect.y;
+        app.appViewCursorClipX = 2 * (app.appViewCursorX / app.appViewRect.w) - 1;
+        app.appViewCursorClipY = -1 *((app.appViewCursorY / app.appViewRect.h) * 2 - 1);
+
         globalVars.scrollY = 0;
         glfwPollEvents();     
-        
+        app.camera.aspectRatio = app.appViewRatio;
         if(app.cursorButtonState[CURSOR_BUTTON_ID_SECONDARY] == CURSOR_BUTTON_STATE_DOWN){
             app.camera.yaw += 0.016 * app.cursor.dx;
             app.camera.pitch += 0.016 * app.cursor.dy;
@@ -207,82 +217,50 @@ int main(int argc, char const *argv[])
         app.camera.distance += globalVars.scrollY;
         camera_get_view_matrix(app.camera, app.viewMatrix);
         camera_get_projection_matrix(app.camera, app.projectionMatrix);
-        mat4x4_mul(app.projectionViewMatrix, app.projectionMatrix, app.viewMatrix);
-        mat4x4_invert(app.invertedMatrix, app.projectionViewMatrix);
-        camera_get_position(app.camera, app.cameraPosition);
-        app_update_cursor_ray(&app);
-        {
-            float distance = 1000;
-            int hitEntity = RAY_HIT_ENTITY_NONE;
-            int hitSide = AABB_SIDE_LEFT;
-            app.cursorRayDidHit = 0;
-        
-            app_ray_vs_y0(&app, &app.cursorRayDidHit, app.cursorRay, &hitEntity, &distance);
-            app_ray_vs_voxel_model(&app, &app.cursorRayDidHit, app.voxelModel, app.cursorRay, &hitEntity, &distance, &hitSide);
+        if(app.cursorPanelFocus == CURSOR_PANEL_FOCUS_APP_VIEW){
+            mat4x4_mul(app.projectionViewMatrix, app.projectionMatrix, app.viewMatrix);
+            mat4x4_invert(app.invertedMatrix, app.projectionViewMatrix);
+            camera_get_position(app.camera, app.cameraPosition);
+            app_update_cursor_ray(&app);
+            {
+                float distance = 1000;
+                int hitEntity = RAY_HIT_ENTITY_NONE;
+                int hitSide = AABB_SIDE_LEFT;
+                app.cursorRayDidHit = 0;
             
-            app.cursorRayHitPoint[0] = app.cursorRay.x + app.cursorRay.dx * distance;
-            app.cursorRayHitPoint[1] = app.cursorRay.y + app.cursorRay.dy * distance;
-            app.cursorRayHitPoint[2] = app.cursorRay.z + app.cursorRay.dz * distance;   
-        
-            app.cursorHitEntity = hitEntity;
-            app.cursorSideHit = hitSide;
-            
-        }
-    
-        if(app.cursorRayDidHit){
-            app_update_ray_hit_model(&app);
-            if(app.voxelModel.head){
-                app_update_voxel_head_model(&app);   
+                app_ray_vs_y0(&app, &app.cursorRayDidHit, app.cursorRay, &hitEntity, &distance);
+                app_ray_vs_voxel_model(&app, &app.cursorRayDidHit, app.voxelModel, app.cursorRay, &hitEntity, &distance, &hitSide);
+                app.cursorRayHitPoint[0] = app.cursorRay.x + app.cursorRay.dx * distance;
+                app.cursorRayHitPoint[1] = app.cursorRay.y + app.cursorRay.dy * distance;
+                app.cursorRayHitPoint[2] = app.cursorRay.z + app.cursorRay.dz * distance;   
+                app.cursorHitEntity = hitEntity;
+                app.cursorSideHit = hitSide;
+                
             }
-
-            if(app.cursorButtonState[CURSOR_BUTTON_ID_PRIMARY] == CURSOR_BUTTON_STATE_PRESSED){
-                float targetX = -1.0;
-                float targetY = -1.0;
-                float targetZ = -1.0;
-                switch (app.cursorHitEntity)
-                {
-                case RAY_HIT_ENTITY_Y0:
-                    targetX = app.cursorRayHitPoint[0];
-                    targetY = 0.0f;
-                    targetZ = app.cursorRayHitPoint[2];
-                    break;
-                case RAY_HIT_ENTITY_VOXEL_MODEL:
-                    targetX = app.cursorRayHitPoint[0];
-                    targetY = app.cursorRayHitPoint[1];
-                    targetZ = app.cursorRayHitPoint[2];
-                    app_hit_target_from_voxel_model_hit(&app, app.cursorSideHit, &targetX, &targetY, &targetZ);
-                    break;
+            
+            if(app.cursorRayDidHit){
+                app_update_ray_hit_model(&app);
+                if(app.voxelModel.head){
+                    app_update_voxel_head_model(&app);   
                 }
                 
-                if(targetX >= 0 && targetY >= 0 && targetZ >= 0){
-                    unsigned int x = targetX;
-                    unsigned int y = targetY;
-                    unsigned int z = targetZ;
-                    /*
-                    Aabb aabb;
-                    aabb.x = x;
-                    aabb.y = y;
-                    aabb.z = z;
-                    aabb.w = 64;
-                    aabb.h = 64;
-                    aabb.d = 64;
-                    voxel_model_add_voxel_from_aabb(&app.voxelModel, aabb);*/
-                    //voxel_model_add_voxel(&app.voxelModel, x, y, z);
+                if(app.cursorButtonState[CURSOR_BUTTON_ID_PRIMARY] == CURSOR_BUTTON_STATE_PRESSED){
 
-                    Sphere sphere;
-                    sphere.x = x + 0.5;
-                    sphere.y = y + 0.5;
-                    sphere.z = z + 0.5;
-                    sphere.r = 16.0f;
-                    voxel_model_add_voxel_from_sphere(&app.voxelModel, sphere);
-                    
-                    app.voxelCount = voxel_model_count_voxels(&app.voxelModel);
-                    printf("voxel count %d\n", app.voxelCount);
-                    if(app.voxelCount){
-                        app_update_voxel_model(&app);
-                    }     
+                    switch (app.voxelEditModeId)
+                    {
+                    case VOXEL_EDIT_MODE_ID_ADD:
+                        app_voxel_edit_mode_add(&app);
+                        break;
+                    case VOXEL_EDIT_MODE_ID_DELETE:
+                        app_voxel_edit_mode_delete(&app);
+                        break;
+                    }
                 }
-            }         
+                app.voxelCount = voxel_model_count_voxels(&app.voxelModel);
+                if(app.voxelCount){
+                    app_update_voxel_model(&app);
+                }  
+            }
         }
 
         //Draw Section
@@ -301,10 +279,19 @@ int main(int argc, char const *argv[])
             glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_COLOR_ONLY],"uViewMat"),
             1, GL_FALSE, (float*)app.viewMatrix
         );
-        
+        glViewport(0,0, app.appViewRect.w, app.appViewRect.h);
         glClearColor(app.backgroundColor.r, app.backgroundColor.g, app.backgroundColor.b, app.backgroundColor.a);
         glEnable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        if(app.voxelModel.head){
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glBindBuffer(GL_ARRAY_BUFFER, app.voxelHeadVertexBuffer);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.voxelHeadElementBuffer);
+            app_use_pos_color_32_vertex();
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
         if(app.voxelCount){
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             glBindBuffer(GL_ARRAY_BUFFER, app.voxelModelVertexBuffer);
@@ -314,22 +301,12 @@ int main(int argc, char const *argv[])
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
 
-        if(app.voxelModel.head){
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glBindBuffer(GL_ARRAY_BUFFER, app.voxelHeadVertexBuffer);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.voxelHeadElementBuffer);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        }
-
-        if(app.cursorRayDidHit){
+        if(app.cursorRayDidHit && app.cursorPanelFocus == CURSOR_PANEL_FOCUS_APP_VIEW){
             glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_ID_RAY_HIT]);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_ID_RAY_HIT]);
             app_use_pos_color_32_vertex();
             glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0); 
         }
-        
         if(app.floorGridVertexCount){
             glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_ID_FLOOR_GRID]);
             app_use_pos_color_32_vertex();
@@ -339,13 +316,20 @@ int main(int argc, char const *argv[])
         glUseProgram(0);
         
         nk_glfw3_new_frame(&glfw);
+        nk_style_push_float(ctx, &ctx->style.window.padding.x, 0.0);
+        nk_style_push_float(ctx, &ctx->style.window.padding.y, 0.0);
+        nk_style_push_float(ctx, &ctx->style.window.spacing.x, 0.0);
+        nk_style_push_float(ctx, &ctx->style.window.spacing.y, 0.0);
+        nk_style_push_float(ctx, &ctx->style.window.group_padding.x, 0.0);
+        nk_style_push_float(ctx, &ctx->style.window.group_padding.y, 0.0);
         
+
         if(nk_begin(ctx, "App Window", nk_rect(0,0,app.windowWidth, app.windowHeight), 
-        NK_WINDOW_BACKGROUND | NK_WINDOW_NO_SCROLLBAR)){
+        NK_WINDOW_BACKGROUND | NK_WINDOW_NO_SCROLLBAR |NK_WINDOW_BORDER)){
             
             nk_menubar_begin(ctx);            
             struct nk_vec2 s = {64, 64};
-            nk_layout_row_static(ctx, 32, 32, 3);
+            nk_layout_row_static(ctx, 32, app.menuBarHeight, 3);
             if(nk_menu_begin_label(ctx, "File", NK_TEXT_LEFT, s)){
                 nk_layout_row_dynamic(ctx, 25,1);
                 nk_menu_item_label(ctx, "New", NK_TEXT_LEFT);
@@ -365,37 +349,69 @@ int main(int argc, char const *argv[])
             nk_menubar_end(ctx);
 
 
-            nk_layout_row_begin(ctx, NK_STATIC,app.windowHeight - 32, 3);
-            nk_layout_row_push(ctx, 64);
-            if(nk_group_begin(ctx, "Selector Panel", NK_WINDOW_NO_SCROLLBAR)){
-                nk_layout_row_static(ctx, 32, 32, 1);
+            nk_layout_row_begin(ctx, NK_STATIC,app.windowHeight - app.menuBarHeight, 3);
+            nk_layout_row_push(ctx, app.propertySelectorWidth);
+            if(nk_group_begin(ctx, "Selector Panel", NK_WINDOW_NO_SCROLLBAR |NK_WINDOW_BORDER)){
+                nk_layout_row_static(ctx, 48, 48, 1);
                 nk_select_label(ctx, "voxelEditProps", NK_TEXT_LEFT, nk_true);
                 nk_select_label(ctx, "CameraProps", NK_TEXT_LEFT, nk_false);
                 nk_group_end(ctx);   
             }
 
-            nk_layout_row_push(ctx, 128);
-            if(nk_group_begin(ctx, "Properties Panel", NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE)){
-                nk_layout_row_static(ctx, 32, 32, 1);
-                nk_label(ctx, "Hello", NK_TEXT_LEFT);
+            nk_layout_row_push(ctx, app.propertyWidth);
+            if(nk_group_begin(ctx, "Properties Panel", NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE  |NK_WINDOW_BORDER)){
+
+                {
+                    
+                    nk_layout_row_static(ctx, 32, 32, 2);
+                    
+                    nk_bool pred = (app.voxelEditModeId == VOXEL_EDIT_MODE_ID_ADD) ? nk_true : nk_false;
+                    if(nk_select_label(ctx,"addVoxel", NK_TEXT_LEFT, pred)){
+                        app.voxelEditModeId = VOXEL_EDIT_MODE_ID_ADD;
+                    }
+                    
+                    pred = (app.voxelEditModeId == VOXEL_EDIT_MODE_ID_DELETE) ? nk_true : nk_false;
+                    if(nk_select_label(ctx,"deleteVoxel", NK_TEXT_LEFT, pred)){
+                        app.voxelEditModeId = VOXEL_EDIT_MODE_ID_DELETE;
+                    }
+                }
+                nk_layout_row_static(ctx, 32, 32, 3);
+                nk_bool pred = (app.voxelEditorShapeId == VOXEL_EDITOR_SHAPE_ID_POINT) ? nk_true : nk_false;
+                if(nk_select_label(ctx,"point", NK_TEXT_LEFT, pred)){
+                    app.voxelEditorShapeId = VOXEL_EDITOR_SHAPE_ID_POINT;
+                }
+                pred = (app.voxelEditorShapeId == VOXEL_EDITOR_SHAPE_ID_CUBE) ? nk_true : nk_false;
+
+                if(nk_select_label(ctx,"cube", NK_TEXT_LEFT, pred)){
+                    app.voxelEditorShapeId = VOXEL_EDITOR_SHAPE_ID_CUBE;
+
+                }
+                pred = (app.voxelEditorShapeId == VOXEL_EDITOR_SHAPE_ID_SPHERE) ? nk_true : nk_false;
+
+                if(nk_select_label(ctx,"sphere", NK_TEXT_LEFT, pred)){
+                    app.voxelEditorShapeId = VOXEL_EDITOR_SHAPE_ID_SPHERE;
+                }
+                
                 nk_group_end(ctx);   
             }
 
-            nk_layout_row_push(ctx, app.windowWidth - 128 - 64);
-            if(nk_group_begin(ctx, "View Panel", NK_WINDOW_NO_SCROLLBAR)){
-
-                nk_layout_row_static(ctx, app.windowHeight - 32, app.windowWidth - 128 - 64, 1);
+            nk_layout_row_push(ctx, app.appViewRect.w);
+            if(nk_group_begin(ctx, "View Panel", NK_WINDOW_NO_SCROLLBAR |NK_WINDOW_BORDER)){
+                nk_layout_row_static(ctx, app.appViewRect.h, app.appViewRect.w, 1);
                 struct nk_image image = nk_image_id(app.textureId[TEXTURE_ID_APP_VIEW_TEXTURE]);
                 nk_image_color(ctx, image, nk_white);
                 nk_group_end(ctx);   
-
             }
             nk_layout_row_end(ctx);
         }
         nk_end(ctx);
-        
-       
-    
+        nk_style_pop_float(ctx);
+        nk_style_pop_float(ctx);
+        nk_style_pop_float(ctx);
+        nk_style_pop_float(ctx);
+        nk_style_pop_float(ctx);
+        nk_style_pop_float(ctx);
+
         if(nk_begin(ctx, "Debug Window", nk_rect(0,0, 120, 120), 
             NK_WINDOW_MINIMIZABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MOVABLE)){
             char str[20 *4];

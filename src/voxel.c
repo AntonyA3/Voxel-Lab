@@ -283,3 +283,155 @@ void voxel_add_voxels_from_sphere(Voxel *voxel, Sphere sphere, int isNew){
         }
     }
 }
+
+void voxel_regenerate_children(Voxel *voxel){
+    if(voxel->size == 2){
+        for(int i = 0; i < 8; i++){
+            int isLeft = voxel_index_is_left(i);
+            int isBottom = voxel_index_is_bottom(i);
+            int isFront = voxel_index_is_front(i);
+            int index = 4 * !isLeft + 2 * !isBottom + !isFront;
+            voxel->child[i] = (Voxel*) malloc(sizeof(Voxel));
+            voxel->child[i]->size = 1;
+            voxel->child[i]->origin[0] = voxel->origin[0] - isLeft;
+            voxel->child[i]->origin[1] = voxel->origin[1] - isBottom;
+            voxel->child[i]->origin[2] = voxel->origin[2] - isFront;
+            voxel_init_children_as_null(voxel->child[i]);
+        }
+    }else{
+        for(int i = 0; i < 8; i++){
+            int isLeft = voxel_index_is_left(i);
+            int isBottom = voxel_index_is_bottom(i);
+            int isFront = voxel_index_is_front(i);
+            int index = 4 * !isLeft + 2 * !isBottom + !isFront;
+            int qs = voxel->size / 4;
+            voxel->child[i] = (Voxel*) malloc(sizeof(Voxel));
+            voxel->child[i]->size = voxel->size / 2;
+            voxel->child[i]->origin[0] = voxel->origin[0] + (isLeft * -qs) + (!isLeft * qs);
+            voxel->child[i]->origin[1] = voxel->origin[1] + (isBottom * -qs) + (!isBottom * qs);
+            voxel->child[i]->origin[2] = voxel->origin[2] + (isFront * -qs) + (!isFront * qs);
+            voxel_init_children_as_null(voxel->child[i]);
+        }
+
+    }
+}
+
+void voxel_delete_voxel(Voxel **voxel, unsigned int x, unsigned int y, unsigned int z){
+    Voxel *voxelEntity = (*voxel);
+    int isLeft = (x < voxelEntity->origin[0]);
+    int isBottom = (y < voxelEntity->origin[1]);
+    int isFront = (z < voxelEntity->origin[2]);
+    int n = 4 * !isLeft + 2 * !isBottom + !isFront;
+
+    if((voxelEntity->size) == 2){
+        if(voxel_is_leaf(*voxel)){     
+            voxel_regenerate_children(*voxel);
+          
+        }
+        if(voxelEntity->child[n] != NULL){
+            free((*voxel)->child[n]);
+            (*voxel)->child[n] = NULL;
+        }
+        if(voxel_is_leaf(*voxel)){
+            *voxel = NULL;
+            free(*voxel);
+        }
+    }else{
+        if(voxel_is_leaf(*voxel)){
+            voxel_regenerate_children(*voxel);
+        }
+
+        if((*voxel)->child[n] != NULL){     
+            voxel_delete_voxel(&(*voxel)->child[n], x, y, z); 
+        }
+
+        if(voxel_is_leaf(*voxel)){
+            *voxel = NULL;
+            free(*voxel);
+        }
+    }
+}
+
+void voxel_delete_voxel_from_aabb(Voxel **voxel, Aabb aabb){
+    if((*voxel)->size == 2){
+        if(voxel_is_leaf(*voxel)){
+            voxel_regenerate_children(*voxel);
+        }
+        for(int i = 0; i < 8; i++){
+            if((*voxel)->child[i] != NULL){
+                float x, y, z;
+                x = (*voxel)->child[i]->origin[0] + 0.5;
+                y = (*voxel)->child[i]->origin[1] + 0.5;
+                z = (*voxel)->child[i]->origin[2] + 0.5;
+                if(aabb_contains_point(aabb, x, y, z)){
+                    free((*voxel)->child[i]);
+                    (*voxel)->child[i] = NULL;
+                }
+            }
+        }
+        if(voxel_is_leaf(*voxel)){
+            free(*voxel);
+            *voxel = NULL;
+        }
+    }else{
+        if(voxel_is_leaf(*voxel)){
+            voxel_regenerate_children(*voxel);
+        }
+        for(int i = 0; i < 8; i++){
+            if((*voxel)->child[i] != NULL){
+                Aabb voxBox = voxel_to_aabb(*(*voxel)->child[i]);
+                vec3 overlap;
+                aabb_get_overlaping_area(voxBox, aabb, overlap);
+                if((overlap[0] >= 0.5) && (overlap[1] >= 0.5) && (overlap[2] >= 0.5)){
+                    voxel_delete_voxel_from_aabb(&(*voxel)->child[i], aabb);
+                }
+            }
+        }
+        if(voxel_is_leaf(*voxel)){
+            free(*voxel);
+            *voxel = NULL;
+        }
+    }
+}
+
+void voxel_delete_voxel_from_sphere(Voxel **voxel, Sphere sphere){
+    if((*voxel)->size == 2){
+        if(voxel_is_leaf(*voxel)){
+            voxel_regenerate_children(*voxel);
+        }
+        for(int i = 0; i < 8; i++){
+            if((*voxel)->child[i] != NULL){
+                float x, y, z;
+                x = (*voxel)->child[i]->origin[0] + 0.5;
+                y = (*voxel)->child[i]->origin[1] + 0.5;
+                z = (*voxel)->child[i]->origin[2] + 0.5;
+                if(sphere_contains_point(sphere, x, y, z)){
+                    free((*voxel)->child[i]);
+                    (*voxel)->child[i] = NULL;
+                }
+            }
+        }
+        if(voxel_is_leaf(*voxel)){
+            free(*voxel);
+            *voxel = NULL;
+        }
+    }else{
+        if(voxel_is_leaf(*voxel)){
+            voxel_regenerate_children(*voxel);
+        }
+        for(int i = 0; i < 8; i++){
+            if((*voxel)->child[i] != NULL){
+                Aabb voxBox = voxel_to_aabb_from_child_i(**voxel, i); 
+                Aabb predBox = aabb_get_box_with_subtracted_corners(voxBox, 0.5f);
+                int overlapPred = sphere_intersects_aabb(sphere, predBox);  
+                if(overlapPred){
+                    voxel_delete_voxel_from_sphere(&(*voxel)->child[i], sphere);
+                }
+            }
+        }
+        if(voxel_is_leaf(*voxel)){
+            free(*voxel);
+            *voxel = NULL;
+        }
+    }
+}

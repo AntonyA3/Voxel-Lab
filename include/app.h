@@ -24,8 +24,13 @@
 #include "../include/aabb_side.h"
 #include "../include/frame_buffer_id.h"
 #include "../include/texture_id.h"
+#include "../include/rect.h"
+#include "../include/voxel_edit_mode_id.h"
+#include "../include/voxel_editor_shape_id.h"
 typedef struct{
     Cursor cursor;
+    float appViewCursorX, appViewCursorY;
+    float appViewCursorClipX, appViewCursorClipY;
     Camera camera;
     GridXZ floorGrid;
     PosColor32Vertex *floorGridVertexArray;
@@ -37,7 +42,7 @@ typedef struct{
     GLuint frameBufferId[FRAME_BUFFER_ID_COUNT];
     GLuint textureId[TEXTURE_ID_COUNT];
     GLuint shaderProgramId[SHADER_PROGRAM_ID_COUNT];
-
+    int voxelEditorShapeId;
     mat4x4 projectionMatrix;
     mat4x4 viewMatrix;
     mat4x4 projectionViewMatrix;
@@ -45,17 +50,19 @@ typedef struct{
     ColorRgbaF backgroundColor;
     float menuBarHeight;
     float windowWidth, windowHeight, windowRatio;
-    float appViewWidth, appViewHeight, appViewRatio;
+    Rect appViewRect;
+    float appViewRatio;
     float propertyWidth, propertyHeight;
     float propertySelectorWidth, propertySelectorHeight;
     int cursorButtonDown[CURSOR_BUTTON_ID_COUNT];
     int cursorButtonState[CURSOR_BUTTON_ID_COUNT];
+    int cursorPanelFocus;
     Ray cursorRay;
     int cursorRayDidHit;
     int cursorHitEntity;
     int cursorSideHit;
     vec3 cursorRayHitPoint;
-
+    int voxelEditModeId;
     VoxelModel voxelModel;
     PosColor32Vertex *voxelModelVertexArray;
     unsigned int *voxelModelElementArray;
@@ -78,7 +85,10 @@ void app_update_voxel_model(App *app);
 void app_update_voxel_head_model(App* app);
 void app_point_at_ray_distance(Ray ray, float distance, vec3 point);
 void app_hit_target_from_voxel_model_hit(App *app, int side, float *targetX, float *targetY, float *targetZ);
-
+void app_update_app_view(App *app);
+void app_update_app_view_frame(App *app);
+void app_voxel_edit_mode_add(App *app);
+void app_voxel_edit_mode_delete(App *app);
 int app_point_in_yz_plane(vec3 point,float z, float depth, float y, float height);
 int app_point_in_xy_plane(vec3 point,float x, float width, float y, float height);
 int app_point_in_xz_plane(vec3 point,float x, float width, float z, float depth);
