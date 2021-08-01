@@ -20,6 +20,14 @@
         "vector3.h": "c",
         "sphere.h": "c",
         "shader_program_id.h": "c",
-        "number_functions.h": "c"
+        "number_functions.h": "c",
+        "app_nk_gui.h": "c",
+        "voxel_editor_shape_id.h": "c",
+        "voxel_edit_mode_id.h": "c",
+        "voxel_edit_dynamic_id.h": "c",
+        "camera.h": "c",
+        "camera_mode.h": "c",
+        "selection_tool_state.h": "c",
+        "box_scale_tool.h": "c"
     }
 }

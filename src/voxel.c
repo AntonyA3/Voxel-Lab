@@ -198,6 +198,7 @@ Aabb voxel_to_aabb_from_child_i(Voxel voxel, int i){
 }
 
 
+
 void voxel_add_voxels_from_aabb(Voxel *voxel, Aabb aabb, int isNew){
     if(voxel->size == 2){ 
         if(isNew || !voxel_is_leaf(voxel)){
@@ -434,4 +435,21 @@ void voxel_delete_voxel_from_sphere(Voxel **voxel, Sphere sphere){
             *voxel = NULL;
         }
     }
+}
+
+int voxel_is_point_in_voxel(Voxel* voxel,float x, float y,float z){
+    Aabb voxBox = voxel_to_aabb(*voxel);
+    if(aabb_contains_point(voxBox, x, y, z)){
+        if(voxel_is_leaf){
+            return 1;
+        }
+        for(int i = 0; i < 8; i++){
+            if(voxel->child[i] != NULL){
+                if(voxel_is_point_in_voxel(voxel->child[i], x, y, z)){
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
 }

@@ -61,6 +61,15 @@ Aabb aabb_get_box_with_subtracted_corners(Aabb aabb, float subtraction){
     return aabb;
 }
 
+Aabb aabb_from_origin_halfExtents(vec3 origin, vec3 halfExtents){
+    Aabb box;
+    vec3_sub(box.min, origin, halfExtents);
+    vec3_scale(box.extents, halfExtents, 2.0);
+
+    return box;
+}
+
+
 void aabb_get_box_corners(Aabb aabb, vec3 corners[8]){
     vec3 centre, halfExtents = {aabb.w, aabb.h, aabb.d};
     aabb_get_centre(aabb, centre);

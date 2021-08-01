@@ -2,9 +2,15 @@
 #define AABB_H
 #include "../include/linmath.h"
 #include "../include/number_functions.h"
-typedef struct
+typedef union
 {
-    float x, y, z, w, h, d;
+    struct{
+        float x, y, z, w, h, d;
+    };
+    struct{
+        vec3 min;
+        vec3 extents;
+    };
 }Aabb;
 
 void aabb_get_centre(Aabb aabb, vec3 centre);
@@ -16,5 +22,5 @@ int aabb_contains_point_inclusive(Aabb aabb, float x, float y, float z);
 int aabb_contains_aabb(Aabb aabbContainer, Aabb aabb);
 
 Aabb aabb_get_box_with_subtracted_corners(Aabb aabb, float subtraction);
-
+Aabb aabb_from_origin_halfExtents(vec3 origin, vec3 halfExtents);
 #endif
