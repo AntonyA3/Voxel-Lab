@@ -1,0 +1,4 @@
+#ifndef FRAME_BUFFER_ID_H
+#define FRAME_BUFFER_ID_H
+enum frame_buffer_id{FRAME_BUFFER_ID_APP_VIEW, FRAME_BUFFER_ID_COUNT};
+#endif

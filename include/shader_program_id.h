@@ -1,0 +1,6 @@
+#ifndef SHADER_PROGRAM_ID_H
+#define SHADER_PROGRAM_ID_H
+enum shader_program_id{SHADER_PROGRAM_ID_FLAT, 
+    SHADER_PROGRAM_ID_PHONG,
+    SHADER_PROGRAM_ID_COUNT};
+#endif

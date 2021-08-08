@@ -1,0 +1,33 @@
+{
+    "makefile.extensionOutputFolder": "./.vscode",
+    "files.associations": {
+        "voxel.h": "c",
+        "aabb.h": "c",
+        "raycast.h": "c",
+        "menu_bar.h": "c",
+        "primitive_fact.h": "c",
+        "prim_fact.h": "c",
+        "app.h": "c",
+        "glfw3.h": "c",
+        "orbit_camera.h": "c",
+        "grid.h": "c",
+        "nuklear.h": "c",
+        "nuklear_glfw_gl3.h": "c",
+        "nuklear_gui.h": "c",
+        "cursor.h": "c",
+        "ray.h": "c",
+        "vector3ui.h": "c",
+        "vector3.h": "c",
+        "sphere.h": "c",
+        "shader_program_id.h": "c",
+        "number_functions.h": "c",
+        "app_nk_gui.h": "c",
+        "voxel_editor_shape_id.h": "c",
+        "voxel_edit_mode_id.h": "c",
+        "voxel_edit_dynamic_id.h": "c",
+        "camera.h": "c",
+        "camera_mode.h": "c",
+        "selection_tool_state.h": "c",
+        "box_scale_tool.h": "c"
+    }
+}

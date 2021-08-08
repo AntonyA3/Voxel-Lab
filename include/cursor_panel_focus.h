@@ -1,0 +1,4 @@
+#ifndef CURSOR_PANEL_FOCUS_H
+#define CURSOR_PANEL_FOCUS_H
+enum cursor_panel_focus{CURSOR_PANEL_FOCUS_APP_VIEW, CURSOR_PANEL_FOCUS_GUI};
+#endif
