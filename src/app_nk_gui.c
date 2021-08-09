@@ -28,6 +28,7 @@ void app_nk_gui_menu_bar(App *app, struct nk_context *ctx){
 }
 
 void app_nk_gui_voxel_shape_selector(App *app, struct nk_context *ctx){
+    /*
     nk_layout_row_static(ctx, 32, 32, 3);
     
     nk_bool pred = (app->voxelEditor.shape == VOXEL_EDITOR_SHAPE_ID_POINT) ? nk_true : nk_false;
@@ -45,6 +46,7 @@ void app_nk_gui_voxel_shape_selector(App *app, struct nk_context *ctx){
     if(nk_select_label(ctx,"sphere", NK_TEXT_LEFT, pred)){
         app->voxelEditor.shape = VOXEL_EDITOR_SHAPE_ID_SPHERE;
     }
+    */
 }
 
 void app_nk_gui_voxel_point_props(App *app, struct nk_context *ctx){
@@ -52,7 +54,7 @@ void app_nk_gui_voxel_point_props(App *app, struct nk_context *ctx){
 }
 
 void app_nk_gui_voxel_cube_props(App *app, struct nk_context *ctx){
-
+    /*
     float width = app->voxelEditor.aabb.w;
     float height = app->voxelEditor.aabb.h;
     float depth = app->voxelEditor.aabb.d;
@@ -68,9 +70,11 @@ void app_nk_gui_voxel_cube_props(App *app, struct nk_context *ctx){
     app->voxelEditor.aabb.w = width;
     app->voxelEditor.aabb.h = height;
     app->voxelEditor.aabb.d = depth;
+    */
 }
 
 void app_nk_gui_voxel_sphere_props(App *app, struct nk_context *ctx){
+    /*
     float rad = app->voxelEditor.sphere.r;
     if(nk_group_begin(ctx, "Sphere Properties", NK_WINDOW_BORDER)){
         nk_layout_row_static(ctx, 32, 128,1);
@@ -78,11 +82,13 @@ void app_nk_gui_voxel_sphere_props(App *app, struct nk_context *ctx){
         nk_group_end(ctx);   
     }
     app->voxelEditor.sphere.r = rad;
+    */
 
 }
 
 void app_nk_gui_voxel_editor_props(App *app, struct nk_context *ctx){
-    {            
+    /*{    
+                
         nk_layout_row_static(ctx, 32, 32, 2);
         
         nk_bool pred = (app->voxelEditor.editMode == VOXEL_EDIT_MODE_ID_ADD) ? nk_true : nk_false;
@@ -134,11 +140,13 @@ void app_nk_gui_voxel_editor_props(App *app, struct nk_context *ctx){
         app_nk_gui_voxel_sphere_props(app, ctx);
         break;
     }
+    */
     
     
 }
 
 void app_nk_gui_camera_props(App *app, struct nk_context *ctx){
+    /*
     nk_layout_row_static(ctx, 32, 64,2);
 
     nk_bool pred = (app->camera.cameraMode == CAMERA_MODE_PERSPECTIVE) ? nk_true : nk_false;
@@ -188,10 +196,12 @@ void app_nk_gui_camera_props(App *app, struct nk_context *ctx){
     case CAMERA_MODE_ORTHOGRAPHIC:
         break;
     }
+    */
 
 }
 
 void app_nk_gui_scene_props(App *app, struct nk_context *ctx){
+    /*
     float lightYaw = app->sceneLightOrientation[0];
     float lightPitch = app->sceneLightOrientation[1];
     int r = app->backgroundColor.r * 255;
@@ -224,7 +234,7 @@ void app_nk_gui_scene_props(App *app, struct nk_context *ctx){
     app->backgroundColor.g = g / 255.0f;
     app->backgroundColor.b = b / 255.0f;
     app->backgroundColor.a = a / 255.0f;
-
+    */
 
 }
 

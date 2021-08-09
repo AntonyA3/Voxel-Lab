@@ -1,6 +1,96 @@
 #include "../include/voxel_tree.h"
 
+/*
+void voxel_tree_contains_form(VoxelTree voxelTree, int shape, float *shapeData){
+    switch (shape)
+    {
+    case SHAPE_AABB:
+        break;
+    case SHAPE_SPHERE:
+        break;
+    }
+}
+*/
 
+void voxel_tree_empty_expander(VoxelTree *voxelTree, int shape, float *shapeData){
+    Aabb shapeAabb = shape_to_aabb(shape, shapeData);
+    Aabb voxBox = voxel_to_aabb(*voxelTree->head);
+    vec3 corners[8];
+    aabb_get_box_corners(shapeAabb, corners);
+
+    for(int i = 0; i < 8; i++){
+        while (!aabb_contains_point(voxBox, corners[i][0], corners[i][1], corners[i][2]))
+        {
+            voxelTree->head->size *= 2;
+            voxBox = voxel_to_aabb(*voxelTree->head);
+        }
+    }
+    
+}
+
+void voxel_tree_head_expander(VoxelTree *voxelTree, int shape, float *shapeData){
+    Aabb shapeBox = shape_to_aabb(shape, shapeData);
+    Aabb voxBox = voxel_to_aabb(*voxelTree->head);
+    vec3 corners[8];
+    aabb_get_box_corners(shapeBox, corners);
+
+    if(
+        (corners[6][0] >= voxelTree->head->origin[0]) &&
+        (corners[6][1] >= voxelTree->head->origin[1]) &&
+        (corners[6][2] >= voxelTree->head->origin[2])
+    ){
+        int i = 0;
+        while(i <100 && !aabb_contains_point_inclusive(voxBox, corners[6][0], corners[6][1], corners[6][2])){
+            Voxel *newHead = (Voxel*) malloc(sizeof(Voxel));
+            int hs = voxelTree->head->size >> 1;
+            
+            newHead->size = voxelTree->head->size * 2;
+            newHead->origin[0] = voxelTree->head->origin[0] + hs;
+            newHead->origin[1] = voxelTree->head->origin[1] + hs;
+            newHead->origin[2] = voxelTree->head->origin[2] + hs;
+            voxel_init_children_null(newHead);
+
+            newHead->child[6] = voxelTree->head;
+            voxelTree->head = newHead;
+            i++;   
+            voxBox = voxel_to_aabb(*voxelTree->head);
+        }
+    }
+    
+
+}
+
+void voxel_tree_expander(VoxelTree *voxelTree, int shape, float *shapeData){
+    int isEmpty = 0;
+    if(voxelTree->head == NULL){
+        isEmpty = 1;
+        voxelTree->head = (Voxel*) malloc(sizeof(Voxel));
+        voxelTree->head->size = 2;
+        {
+            int zero[3] = {0,0,0};
+            memcpy(voxelTree->head->origin, zero, sizeof(int) * 3);
+        }
+        voxel_init_children_null(voxelTree->head);
+    }
+
+    
+    switch (isEmpty)
+    {
+    case 0:
+        voxel_tree_head_expander(voxelTree, shape, shapeData);
+        break;
+    case 1:
+        voxel_tree_empty_expander(voxelTree, shape, shapeData);
+        break;
+    }
+}
+
+void voxel_tree_edit(VoxelTree *voxelTree, int shape, float *shapeData){
+    voxel_tree_expander(voxelTree, shape, shapeData);
+    
+}
+
+/*
 void voxel_tree_double_empty(VoxelTree *voxelTree){
     voxelTree->head->size *= 2;
     for(int i = 0; i < 3; i++){
@@ -326,7 +416,7 @@ int voxel_tree_count_voxels(VoxelTree *voxelTree){
     }
     return 0;
 }
-/*
+
 void voxel_tree_generate_model(VoxelTree voxelTree, float *vertexArray, unsigned int *elementArray){
     if(voxelTree.head != NULL){
         int index = 0;
@@ -334,7 +424,7 @@ void voxel_tree_generate_model(VoxelTree voxelTree, float *vertexArray, unsigned
         voxel_generate_model(voxelTree.head, color, vertexArray, elementArray, &index);
     }
 }
-*/
+
 
 int voxel_tree_is_point_in_model(VoxelTree *voxelTree, float x, float y, float z){
     if(voxelTree->head != NULL){
@@ -539,3 +629,4 @@ int voxel_tree_edit_voxels_from_voxel_editor(VoxelTree *voxelTree, VoxelEditor *
     }
     return changed;  
 }
+*/

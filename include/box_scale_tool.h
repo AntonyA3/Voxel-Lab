@@ -2,8 +2,10 @@
 #define BOX_SCALE_TOOL_H
 #include "../linmath/linmath.h"
 #include "../include/aabb.h"
+#include "../include/plane.h"
 #include "../include/button_state.h"
 #include "../include/ray.h"
+
 #include "../include/box_scale_tool_state.h"
 #include "../include/box_scale_tool_side.h"
 typedef struct{

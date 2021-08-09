@@ -28,6 +28,9 @@
         "camera.h": "c",
         "camera_mode.h": "c",
         "selection_tool_state.h": "c",
-        "box_scale_tool.h": "c"
+        "box_scale_tool.h": "c",
+        "shape.h": "c",
+        "voxel_tree.h": "c",
+        "linmath.h": "c"
     }
 }

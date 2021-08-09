@@ -185,7 +185,7 @@ void voxel_model_from_voxel(Voxel* voxel, int vertexFormat, float *vertexArray, 
 }
 
 */
-
+/*
 void voxel_model_from_cube(Aabb aabb, float *vertexArray, unsigned int *elementArray, int n, float *colorData){
 
     int j = 0;
@@ -275,3 +275,4 @@ void voxel_model_update_from_tree(VoxelModel *voxelModel, VoxelTree *voxelTree, 
 }
 
   
+*/

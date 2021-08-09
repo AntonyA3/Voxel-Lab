@@ -1,5 +1,5 @@
 #include "../include/box_scale_tool.h"
-
+/*
 void box_scale_tool_pick_side(BoxScaleTool *boxScaleTool,Ray picker){
     float distance = 1000;
     int side;
@@ -170,3 +170,4 @@ Plane box_scale_get_plane(BoxScaleTool *boxScaleTool){
     }
     return plane;
 }
+*/

@@ -1,13 +1,7 @@
 #include "../include/app.h"
 
 void app_update_window_glfw(App *app, GLFWwindow *window){
-    int width, height;
-    glfwGetWindowSize(window, &width, &height);
-    app->windowRect.x = 0;
-    app->windowRect.y = 0;
-    app->windowRect.w= (float)width;
-    app->windowRect.h = (float)height;
-    app->windowRatio = width /(float)height;
+    
 }
 
 void app_update_cursor_glfw(App *app, GLFWwindow *window){
@@ -42,6 +36,7 @@ void app_use_pos_color_32_vertex(){
     glVertexAttribPointer(1, 4,GL_FLOAT,GL_FALSE, 7 * sizeof(float), (void*)(sizeof(float) * 3));
     glEnableVertexAttribArray(1);
 }
+
 
 int app_generate_shader_program_from_file(App *app, const char *vertexShaderPath, const char *fragmentShaderPath){
     char* vertexText;
@@ -150,24 +145,23 @@ void app_generate_floor_grid_vertex_array(App *app){
 
 }
 
-  
+
 void app_update_voxel_head_model(App* app){
-    /*
+    
     PosColor32Vertex verticies[8];
     unsigned int elements[36];
-    float size = (float)app->voxelModel.head->size/ 2;
-    vec3 origin = {app->voxelModel.head->origin[0], 
-        app->voxelModel.head->origin[1],
-        app->voxelModel.head->origin[2]};
+    unsigned int size = app->mainVoxels.head->size / 2;
+    vec3 origin = {app->mainVoxels.head->origin[0], 
+        app->mainVoxels.head->origin[1],
+        app->mainVoxels.head->origin[2]
+    };
     vec3 halfExtents = {size, size, size};
     ColorRgbaF color = {{1.0,0.0,1.0,1.0}};
-    
     box_generate_box_pos_color_32_vertex(origin, color, halfExtents, verticies, elements);
     glBindBuffer(GL_ARRAY_BUFFER, app->voxelHeadVertexBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(PosColor32Vertex) * 8, verticies, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app->voxelHeadElementBuffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 36, elements, GL_DYNAMIC_DRAW);
-    */
 }
 
 void app_update_ray_hit_model(App *app){
@@ -185,6 +179,7 @@ void app_update_ray_hit_model(App *app){
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 36, elementArray, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
+
 
 int app_get_cursor_button_next_state(int state, int isDown){
     int nextState;
@@ -210,6 +205,8 @@ int app_get_cursor_button_next_state(int state, int isDown){
     return nextState;
 }
 
+/*
+
 //void app_update_voxel_model(App *app, VoxelTree voxelTree){
     /*
     app->voxelModelVertexArray = (PosColor32Vertex*) realloc(app->voxelModelVertexArray, 8 * app->voxelModel.voxelCount * sizeof(PosColor32Vertex));
@@ -223,7 +220,7 @@ int app_get_cursor_button_next_state(int state, int isDown){
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app->voxelModelElementBuffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, app->voxelModel.voxelCount * 36 * sizeof(unsigned int), app->voxelModelElementArray, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);  
-    */
+    
 //}
 
 void app_point_at_ray_distance(Ray ray, float distance, vec3 point){
@@ -369,7 +366,7 @@ void app_hit_target_from_voxel_model_hit(App *app, int side, float *cellX, float
         break;
     }
 }
-
+*/
 void app_update_app_view(App *app){
     app->appViewRect.x = app->propertyWidth + app->propertySelectorWidth;
     app->appViewRect.y = app->menuBarHeight;
@@ -396,7 +393,7 @@ void app_update_app_view_frame(App *app){
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
-
+/*
 int app_voxel_edit_mode_add(App *app){
     /*
     float cellX = -1.0;
@@ -463,7 +460,7 @@ int app_voxel_edit_mode_add(App *app){
         break;
     }
     return 0;
-    */
+    
    return 0;
 
 }
@@ -557,10 +554,10 @@ int app_voxel_edit_mode_delete(App *app){
         }
         break;
     }
-    */
+    
 
 }
-
+*/
 void app_update_ray_hit_result(App *app){
     float distance = 1000;
     int hitEntity = RAY_HIT_ENTITY_NONE;
@@ -569,7 +566,7 @@ void app_update_ray_hit_result(App *app){
 
     if(!app->cursorRayDidHit){
         app_ray_vs_y0(&app, &app->cursorRayDidHit, app->cursorRay, &hitEntity, &distance);
-        app_ray_vs_voxel_tree(&app, &app->cursorRayDidHit, app->mainVoxels, app->cursorRay, &hitEntity, &distance, &hitSide);
+        //app_ray_vs_voxel_tree(&app, &app->cursorRayDidHit, app->mainVoxels, app->cursorRay, &hitEntity, &distance, &hitSide);
     } 
     app->cursorRayHitPoint[0] = app->cursorRay.x + app->cursorRay.dx * distance;
     app->cursorRayHitPoint[1] = app->cursorRay.y + app->cursorRay.dy * distance;
@@ -581,7 +578,7 @@ void app_update_ray_hit_result(App *app){
 void app_quit(App *app){
     app->shouldQuit = 1;
 }
-
+/*
 void app_set_action_bar_text(App *app, char *text){
     memset(app->actionBarText,0, sizeof(char) * 128);   
     int newLength = strcspn(text, "");
@@ -656,7 +653,7 @@ void app_use_voxel_manipulator(App *app,float deltaTime){
             }    
         }      
     }
-    */
+    
 }
 
 
@@ -820,3 +817,4 @@ void app_box_scale_tool_update_model(App *app){
             app_update_box_buffer(app->boxScaleTool.backPulley,&app->vertexBufferId[VERTEX_BUFFER_PZ_BOX_SCALE_PULLEY],
                 &app->elementBufferId[ELEMENT_BUFFER_PZ_BOX_SCALE_PULLEY],color);
         }
+*/

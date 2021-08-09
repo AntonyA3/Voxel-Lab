@@ -70,27 +70,53 @@ Aabb aabb_from_origin_halfExtents(vec3 origin, vec3 halfExtents){
 }
 
 
+void aabb_get_corner(Aabb aabb, int corner, vec3 result){
+    memcpy(&result, aabb.min, sizeof(vec3));
+    switch (corner)
+    {
+    case 0:
+        break;
+    case 1:
+        result[1] += aabb.h;
+        break;
+    case 2:
+        result[0] +=  aabb.w;
+        result[1] +=  aabb.h;
+        break;
+    case 3:
+        result[0] +=  aabb.w;
+        break;
+    case 4:
+        result[2] +=  aabb.d;
+        break;
+    case 5:
+        result[1] +=  aabb.h;
+        result[2] +=  aabb.d;
+        break;
+    case 6:
+        result[0] += aabb.w;
+        result[1] += aabb.h;
+        result[2] += aabb.d;
+        break;
+    case 7:
+        result[0] += aabb.w;
+        result[2] += aabb.d;
+        break;
+    }
+}
+
 void aabb_get_box_corners(Aabb aabb, vec3 corners[8]){
-    vec3 centre, halfExtents = {aabb.w, aabb.h, aabb.d};
-    aabb_get_centre(aabb, centre);
-    vec3_scale(halfExtents, halfExtents, 0.5);
     float aabbCorner[8][3] = {
-        {-1.0, -1.0, -1.0},
-        {-1.0, 1.0, -1.0},
-        {1.0, 1.0, -1.0},
-        {1.0, -1.0, -1.0},
-        {-1.0, -1.0, 1.0},
-        {-1.0, 1.0, 1.0},
-        {1.0, 1.0, 1.0},
-        {1.0, -1.0, 1.0},
+        {aabb.x, aabb.y, aabb.z},
+        {aabb.x, aabb.y + aabb.h, aabb.z},
+        {aabb.x + aabb.w, aabb.y + aabb.h, aabb.z},
+        {aabb.x +  aabb.w, aabb.y, aabb.z},
+        {aabb.x, aabb.y, aabb.z + aabb.d},
+        {aabb.x, aabb.y + aabb.h, aabb.z + aabb.d},
+        {aabb.x + aabb.w, aabb.y + aabb.h, aabb.z + aabb.d},
+        {aabb.x +  aabb.w, aabb.y, aabb.z + aabb.d},
     };
 
-    for(int i = 0; i < 8; i++){
-        for(int j = 0; j < 3; j++){
-            aabbCorner[i][j] = aabbCorner[i][j] * halfExtents[j];
-            aabbCorner[i][j] = aabbCorner[i][j] + centre[j];
-        }
-    }
 
     memcpy(corners, aabbCorner, sizeof(vec3) * 8);
 }

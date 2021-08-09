@@ -3,26 +3,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../include/aabb.h"
-#include "../include/sphere.h"
 #include "../include/voxel.h"
-#include "../include/voxel_editor.h"
-#include "../include/voxel_edit_dynamic_id.h"
-#include "../include/button_state.h"
-#include "../include/voxel_editor_shape_id.h"
-#include "../include/voxel_edit_mode_id.h"
-#include "../include/ray_hit_entity.h"
-#include "../include/aabb_side.h"
-#include "../include/voxel_mod.h"
+#include "../include/shape.h"
+
 typedef struct {
-    Voxel* head;
+    Voxel *head;
     int voxelCount;
     vec3 offset;
-    
 }VoxelTree;
 
-/*Voxel Blit*/
+void voxel_tree_contains_form(VoxelTree voxelTree, int shape, float *shapeData);
+void voxel_tree_expander(VoxelTree *voxelTree, int shape, float *shapeData);
+void voxel_tree_edit(VoxelTree *voxelTree, int shape, float *shapeData);
 
+/*Voxel Blit*/
+/*
 void voxel_tree_cut_from_shape(VoxelTree *giver, VoxelTree *reciever, int shapeId, float *geometry);
 void voxel_delete_voxels_from_shape(Voxel **voxel, int shapeId, float* geometry);
 void voxel_add_voxels_from_shape(Voxel *voxel, int shapeId, float *geometry, int isNew);
@@ -57,4 +52,6 @@ void voxel_tree_voxel_hit_correction(int side, int action , float *x, float *y, 
 int voxel_tree_edit_voxels_from_voxel_editor(VoxelTree *voxelTree, VoxelEditor *voxelEditor, int buttonState,  vec3 hitpoint, int hitentity, int hitside, float deltaTime);
 int voxel_tree_add_voxels_from_voxel_editor(VoxelTree *voxelTree, VoxelEditor *voxelEditor, vec3 hitpoint ,int hitEntity,int hitSide,
     float cellX, float cellY, float cellZ);
+
+*/
 #endif

@@ -76,7 +76,8 @@ typedef struct{
     Aabb selectionBox;
     ColorRgbaF backgroundColor;
     float menuBarHeight;
-    float windowWidth, windowHeight, windowRatio;
+    Rect windowRect;
+    float windowRatio;
     Rect appViewRect;
     float appViewRatio;
     float propertyWidth, propertyHeight;
@@ -91,6 +92,7 @@ typedef struct{
     int cursorSideHit;
     vec3 cursorRayHitPoint;
     int voxelEditModeId;
+    VoxelTree mainVoxels;
     VoxelModel voxelModel;
     VoxelModel voxelModelClipBoard;
     PosColor32Vertex *voxelModelVertexArray;

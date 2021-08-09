@@ -6,6 +6,7 @@
 #include "../include/selection_tool_state.h"
 #include "../include/button_state.h"
 #include "../include/tool_id.h"
+#include "../include/voxel_tree.h"
 typedef struct
 {
 

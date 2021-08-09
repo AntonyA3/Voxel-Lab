@@ -117,3 +117,13 @@ int sphere_intersects_aabb(Sphere sphere, Aabb aabb){
     
     return 0;
 }
+
+Aabb sphere_to_aabb(Sphere sphere){
+    float d = sphere.r * 2;
+    float r = sphere.r;
+    Aabb aabb = {
+        sphere.x - r, sphere.y - r, sphere.z - r, 
+        d,d,d
+    };
+    return aabb;
+}

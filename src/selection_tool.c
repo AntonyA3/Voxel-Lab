@@ -1,6 +1,6 @@
 #include "../include/selection_tool.h"
 
-
+/*
 void selection_tool_update(SelectionTool *selectionTool, MoveTool *moveTool,
     BoxScaleTool *boxScaleTool, int buttonState, vec3 lookVector, Ray picker){   
     switch (selectionTool->state)
@@ -46,3 +46,4 @@ void selection_tool_update(SelectionTool *selectionTool, MoveTool *moveTool,
         }
     }
 }
+*/

@@ -1,5 +1,5 @@
 #include "../include/move_tool.h"
-
+/*
 
 Plane move_tool_get_hit_plane(MoveTool moveTool){
     Plane plane;
@@ -123,4 +123,4 @@ void move_tool_move_voxel_tree(MoveTool *moveTool, Ray picker, VoxelTree *voxelT
     voxelTree->offset[2] += newBox.z - voxBox.z;
 
 
-}
+}*/

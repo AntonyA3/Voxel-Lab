@@ -3,15 +3,19 @@
 #include <stdlib.h>
 #include "../include/aabb.h"
 #include "../include/sphere.h"
-#include "../include/pos_color32_vertex.h"
-#include "../include/box_generator.h"
+
+
 typedef struct Voxel
 {
     unsigned int size;
-    unsigned int origin[3];
+    int origin[3];
     struct Voxel *child[8];
 }Voxel;
 
+Aabb voxel_to_aabb(Voxel voxel);
+void voxel_init_children_null(Voxel *voxel);
+int voxel_count_voxels(Voxel* voxel);
+/*
 Aabb voxel_to_aabb(Voxel voxel);
 Aabb voxel_to_aabb_from_child_i(Voxel voxel, int i);
 void voxel_init_children_as_null(Voxel *voxel);
@@ -37,4 +41,5 @@ int voxel_count_voxels_in_aabb(Voxel *voxel, Aabb aabb);
 
 Voxel* voxel_create_size_1_voxel(unsigned int x, unsigned int y, unsigned int z);
 Voxel* voxel_create_size_gte_2_voxel(Voxel *parent, int isLeft, int isBottom, int isFront);
+*/
 #endif

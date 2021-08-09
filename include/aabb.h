@@ -17,6 +17,7 @@ void aabb_get_centre(Aabb aabb, vec3 centre);
 void aabb_get_max_corner(Aabb aabb, vec3 point);
 void aabb_get_overlaping_area(Aabb aabb1, Aabb aabb2, vec3 overlap);
 void aabb_get_box_corners(Aabb aabb, vec3 corners[8]);
+void aabb_get_corner(Aabb aabb, int corner, vec3 result);
 int aabb_contains_point(Aabb aabb, float x, float y, float z);
 int aabb_contains_point_inclusive(Aabb aabb, float x, float y, float z);
 int aabb_contains_aabb(Aabb aabbContainer, Aabb aabb);

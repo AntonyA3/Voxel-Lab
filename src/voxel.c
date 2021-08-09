@@ -1,25 +1,61 @@
 #include "../include/voxel.h"
 
 Aabb voxel_to_aabb(Voxel voxel){
-    Aabb voxBox;
-    if(voxel.size == 1){
-        voxBox.x = voxel.origin[0];
-        voxBox.y = voxel.origin[1];
-        voxBox.z = voxel.origin[2];
-        voxBox.w = 1.0;
-        voxBox.h = 1.0;
-        voxBox.d = 1.0;
-    }else{
-        int hs = voxel.size / 2;
-        voxBox.x = voxel.origin[0] - hs;
-        voxBox.y = voxel.origin[1] - hs;
-        voxBox.z = voxel.origin[2] - hs;
-        voxBox.w = voxel.size;
-        voxBox.h = voxel.size;
-        voxBox.d = voxel.size;
+    switch (voxel.size)
+    {
+    case 1:
+    {
+        Aabb aabb = {
+        voxel.origin[0], voxel.origin[1], 
+        voxel.origin[2], 1.0, 1.0, 1.0};
+        return aabb;
     }
-    return voxBox;
+    default:
+    {
+        float hs = voxel.size / 2;
+        Aabb aabb = {
+            voxel.origin[0] - hs, voxel.origin[1] - hs, 
+            voxel.origin[2] - hs, voxel.size,
+            voxel.size, voxel.size
+        };
+        return aabb;
+    }
+    }
 }
+
+void voxel_init_children_null(Voxel *voxel){
+    for (int i = 0; i < 8; i++){
+        voxel->child[i] = NULL;
+    }
+}
+int voxel_count_voxels(Voxel* voxel){
+    if(voxel_is_leaf(voxel)){
+        return 1;
+    }
+    int voxelCount = 0;
+    for(int i = 0; i < 8; i++){
+        if(voxel->child[i] != NULL){
+            voxelCount += voxel_count_voxels(voxel->child[i]);
+        }
+    }
+
+    return voxelCount;
+}
+
+int voxel_is_leaf(Voxel *voxel){
+    if(voxel->size == 1){
+        return 1;
+    }
+    int nullcount = 0;
+    for(int i = 0; i < 8; i++){
+        nullcount += voxel->child[i] == NULL;
+    }
+    return (nullcount == 8);
+}
+
+
+/*
+
 
 void voxel_init_children_as_null(Voxel *voxel){
     for(int i = 0; i < 8; i++){
@@ -82,30 +118,7 @@ void voxel_add_voxel(Voxel *voxel, unsigned int x, unsigned int y, unsigned int 
     }   
 }
 
-int voxel_is_leaf(Voxel *voxel){
-    if(voxel->size == 1){
-        return 1;
-    }
-    int nullcount = 0;
-    for(int i = 0; i < 8; i++){
-        nullcount += voxel->child[i] == NULL;
-    }
-    return (nullcount == 8);
-}
 
-int voxel_count_voxels(Voxel* voxel){
-    if(voxel_is_leaf(voxel)){
-        return 1;
-    }
-    int voxelCount = 0;
-    for(int i = 0; i < 8; i++){
-        if(voxel->child[i] != NULL){
-            voxelCount += voxel_count_voxels(voxel->child[i]);
-        }
-    }
-
-    return voxelCount;
-}
 
 void voxel_generate_model(Voxel *voxel, ColorRgbaF color, PosColor32Vertex *vertexArray, unsigned int *elementArray, int *index){
     if(voxel_is_leaf(voxel)){
@@ -453,3 +466,4 @@ int voxel_is_point_in_voxel(Voxel* voxel,float x, float y,float z){
     }
     return 0;
 }
+*/

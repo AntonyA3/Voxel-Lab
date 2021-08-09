@@ -7,6 +7,7 @@
 #include "../include/plane.h"
 #include "../include/ray.h"
 #include "../include/button_state.h"
+#include "../include/voxel_tree.h"
 
 typedef struct 
 {

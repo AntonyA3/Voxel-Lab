@@ -115,14 +115,17 @@ int main(int argc, char const *argv[])
         ColorRgbaF color = {0.5, 0.5, 0.5, 1.0};
         memcpy(&app.backgroundColor, &color, sizeof(ColorRgbaF));
     }
-
-    app_update_window_glfw(&app, window);
+    {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        Rect rect = {0,0, (float) width, (float)height};
+        memcpy(&app.windowRect, &rect, sizeof(Rect));
+        app.windowRatio = width /(float)height;
+    }
     app.menuBarHeight = 32;
     app.propertySelectorWidth = 48;
     app.propertyWidth = 128;
     app.actionBarHeight = 32;
-
-
 
     {
 
@@ -139,6 +142,7 @@ int main(int argc, char const *argv[])
         memcpy(&app.floorGrid, &floorGrid, sizeof(GridXZ));
     }
 
+    /*
     app.mainVoxels.voxelCount = 0;
     app.mainVoxels.offset[0] = 0;
     app.mainVoxels.offset[1] = 0;
@@ -149,7 +153,7 @@ int main(int argc, char const *argv[])
     app.selectedVoxels.offset[1] = 0;
     app.selectedVoxels.offset[2] = 0;
     
-    
+    */
     ctx = nk_glfw3_init(&glfw, window, NK_GLFW3_INSTALL_CALLBACKS);    
     {
         struct nk_font_atlas *atlas;
@@ -171,6 +175,7 @@ int main(int argc, char const *argv[])
     );
     printf("flat shader loaded\n");
     
+    /*
     printf("begin phong shader loading\n");
     app.shaderProgramId[SHADER_PROGRAM_ID_PHONG] = app_generate_shader_program_from_file(
         &app,
@@ -178,8 +183,9 @@ int main(int argc, char const *argv[])
         (const char*)"res/shaders/phong.frag"
 
     );
+    
     printf("phong shader loaded\n");
-
+    */
   
     glGenBuffers(VERTEX_BUFFER_ID_COUNT, app.vertexBufferId);
     glGenBuffers(ELEMENT_BUFFER_ID_COUNT, app.elementBufferId);
@@ -187,10 +193,11 @@ int main(int argc, char const *argv[])
 
     glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_ID_FLOOR_GRID]);
     app_generate_floor_grid_vertex_array(&app);
+    /*
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     {    
-        VoxelModel *voxelModels = {&app.mainVoxelsModel, &app.selectedVoxelsModel};
+        //VoxelModel *voxelModels = {&app.mainVoxelsModel, &app.selectedVoxelsModel};
 
         for(int i = 0; i < 2; i++){
             glGenBuffers(1, &voxelModels[i].vertexBuffer);
@@ -198,35 +205,45 @@ int main(int argc, char const *argv[])
             voxelModels[i].vertexArray = (float*) malloc(sizeof(float));
             voxelModels[i].elementArray = (unsigned int*) malloc(sizeof(unsigned int)); 
         }    
-    }
-    
+    }*/
+    glGenBuffers(1, &app.voxelHeadVertexBuffer);
+    glGenBuffers(1, &app.voxelHeadElementBuffer);
 
     //Generate Frame buffer texture
     glGenFramebuffers(FRAME_BUFFER_ID_COUNT, app.frameBufferId);
     glGenTextures(TEXTURE_ID_COUNT, app.textureId);
-    app_update_app_view_frame(&app);
+    //app_update_app_view_frame(&app);
 
     glfwSetScrollCallback(window, scroll_callback);
     app.propertyMenuId = PROPERTY_MENU_ID_VOXEL_MENU;
     app.cursorPanelFocus = CURSOR_PANEL_FOCUS_GUI;
+    /*
     app.voxelEditor.shape = VOXEL_EDITOR_SHAPE_ID_POINT;
     app.voxelEditor.editMode = VOXEL_EDIT_MODE_ID_ADD;
     app.voxelEditor.dynamics = VOXEL_EDIT_DYNAMIC_PLOP;
     
+    */
     app.actionBarText = (char*) calloc(128,sizeof(char));
     app.actionBarLength = 128; 
 
     app.activeTool = TOOL_ID_VOXEL_MANIPULATOR; 
-    app.selectionTool.subTool = TOOL_ID_BOX_SCALE_TOOL;
+    //app.selectionTool.subTool = TOOL_ID_BOX_SCALE_TOOL;
 
     time = glfwGetTime();
-    while (!glfwWindowShouldClose(window)){
-        app_update_window_glfw(&app, window);
+    while (!glfwWindowShouldClose(window)){        
+        {   
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            app.windowRect.x = 0;
+            app.windowRect.y = 0;
+            app.windowRect.w = width;
+            app.windowRect.h = height;
+        }
 
         app_update_app_view(&app);
         app_update_app_view_frame(&app);
 
-        app_update_cursor_glfw(&app, window);
+        app_update_cursor_glfw(&app, window);  
         {       
             int cursorInRect = rect_contains_point(app.appViewRect, app.cursor.x, app.cursor.y); 
             app.cursorPanelFocus = CURSOR_PANEL_FOCUS_GUI * !cursorInRect + CURSOR_PANEL_FOCUS_APP_VIEW * cursorInRect;
@@ -242,6 +259,8 @@ int main(int argc, char const *argv[])
         app.cursorButtonState[CURSOR_BUTTON_ID_SECONDARY] = app_get_cursor_button_next_state(
             app.cursorButtonState[CURSOR_BUTTON_ID_SECONDARY], app.cursorButtonDown[CURSOR_BUTTON_ID_SECONDARY]
         );
+        
+        /*
         {
             int down = glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS; 
             switch (app.enterButtonState)
@@ -276,6 +295,8 @@ int main(int argc, char const *argv[])
                 break;
             }
         }
+        */
+       
         app.appViewCursorX = app.cursor.x - app.appViewRect.x;
         app.appViewCursorY = app.cursor.y - app.appViewRect.y;
         app.appViewCursorClipX = 2 * (app.appViewCursorX / app.appViewRect.w) - 1;
@@ -283,6 +304,7 @@ int main(int argc, char const *argv[])
 
         globalVars.scrollY = 0;
         glfwPollEvents();     
+
         app.camera.aspectRatio = app.appViewRatio;
         if(app.cursorButtonState[CURSOR_BUTTON_ID_SECONDARY] == CURSOR_BUTTON_STATE_DOWN){
             app.camera.yaw += deltaTime * app.cursor.dx;
@@ -299,71 +321,30 @@ int main(int argc, char const *argv[])
             app.cameraForward[2] = -forward[2];
         }
         
+        
         if(app.cursorPanelFocus == CURSOR_PANEL_FOCUS_APP_VIEW){
             mat4x4_mul(app.projectionViewMatrix, app.projectionMatrix, app.viewMatrix);
             mat4x4_invert(app.invertedMatrix, app.projectionViewMatrix);
             camera_get_position(app.camera, app.cameraPosition);
             app_update_cursor_ray(&app);
-            
-            switch (app.activeTool)
-            {
-            case TOOL_ID_MOVE_TOOL:
-                app.selectionTool.subTool == TOOL_ID_MOVE_TOOL;
-                vec3 origin;
-                aabb_get_centre(app.selectionTool.selectionBox, origin);
-                app_update_move_tool_pulley(&app, origin);
-                break;
-            
-            case TOOL_ID_SELECTION_TOOL:
-                selection_tool_update(&app.selectionTool, &app.moveTool, &app.boxScaleTool,
-                    app.cursorButtonState[CURSOR_BUTTON_ID_PRIMARY], app.cameraForward, app.cursorRay
-                );  
-
-                if((app.enterButtonState == BUTTON_STATE_PRESSED) && app.selectionTool.state == SELECTION_TOOL_STATE_PICK_AREA){   
-                    app.selectionTool.state  = SELECTION_TOOL_STATE_CONFIRMED;
-                }
-                switch (app.selectionTool.subTool)
-                {
-                case TOOL_ID_BOX_SCALE_TOOL:
-                    app_update_box_scale_tool_pulley(&app, app.selectionTool.selectionBox);
-                    break;
-                
-                case TOOL_ID_MOVE_TOOL:
-                    aabb_get_centre(app.selectionTool.selectionBox, origin);
-                    app_update_move_tool_pulley(&app, origin);
-                    break;
-                }                
-            
-            case TOOL_ID_VOXEL_MANIPULATOR:
-                app_update_ray_hit_result(&app);
-                if(app.cursorRayDidHit){
-                    int changed = 0;
-
-                    changed = voxel_tree_edit_voxels_from_voxel_editor(&app.mainVoxels, &app.voxelEditor,
-                        app.cursorButtonState[CURSOR_BUTTON_ID_PRIMARY],
-                        app.cursorRayHitPoint,app.cursorHitEntity, app.cursorSideHit, deltaTime
-                    );
-
-                    if(changed){
-                        app.mainVoxels.voxelCount = voxel_tree_count_voxels(&app.mainVoxels);
-                        if(app.mainVoxels.voxelCount){
-                            voxel_model_update_from_tree(&app.mainVoxelsModel,&app.mainVoxels, 
-                                VERTEX_FLAGS_POSITION + VERTEX_FLAGS_COLOR_RGBA + VERTEX_FLAGS_NORMAL
-                            );
-                        }
-                        
-            
-                    }     
-                }  
-                break;
-            }
-            
+            app_update_ray_hit_result(&app);
+          
             if(app.cursorRayDidHit){
                 app_update_ray_hit_model(&app);
-            }
-            
+                
+
+                if(app.cursorButtonState[CURSOR_BUTTON_ID_PRIMARY] == CURSOR_BUTTON_STATE_PRESSED){
+
+                    float box[6] = {app.cursorRayHitPoint[0], app.cursorRayHitPoint[1], 1, 1, 1};
+                    voxel_tree_edit(&app.mainVoxels, SHAPE_AABB, box);
+                    app.voxelCount = voxel_count_voxels(app.mainVoxels.head);
+                    app_update_voxel_head_model(&app);
+                }
+            }  
         }
         
+       
+        /*
         if(app.activeTool != TOOL_ID_SELECTION_TOOL){
             app_reset_selection_tool(&app);
         }
@@ -380,14 +361,14 @@ int main(int argc, char const *argv[])
         app_move_tool_update_model(&app);
         app_box_scale_tool_update_model(&app);
         
-
+        */
 
         //Draw Section
         glViewport(0,0, app.windowRect.w, app.windowRect.h);
         glClearColor(app.backgroundColor.r, app.backgroundColor.g, app.backgroundColor.b, app.backgroundColor.a);
         glEnable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+        
         glBindFramebuffer(GL_FRAMEBUFFER, app.frameBufferId[FRAME_BUFFER_ID_APP_VIEW]);
         
         
@@ -413,168 +394,32 @@ int main(int argc, char const *argv[])
                 1, GL_FALSE, (float*)idMat
             );
         }
-        
-        /*
-        if(app.selectedVoxels.voxelCount){
-        
-            {
-                mat4x4 modelMat;
-                mat4x4_identity(modelMat);
-                mat4x4_translate(modelMat, app.selectedVoxels.offset[0], app.selectedVoxels.offset[1], app.selectedVoxels.offset[2]);
-                glUniformMatrix4fv(
-                    glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_COLOR_ONLY],"uModelMat"),
-                    1, GL_FALSE, (float*)modelMat
-                );
-            }
-            glBindBuffer(GL_ARRAY_BUFFER, app.selectedVoxelsModel.vertexBuffer);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.selectedVoxelsModel.elementBuffer);
+        if(app.floorGridVertexCount){
+            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_ID_FLOOR_GRID]);
             app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, app.selectedVoxels.voxelCount * 36, GL_UNSIGNED_INT, 0);
-            {
-                mat4x4 idMat;
-                mat4x4_identity(idMat);
-                glUniformMatrix4fv(
-                    glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_COLOR_ONLY],"uModelMat"),
-                    1, GL_FALSE, (float*)idMat
-                );
-            }
+            glDrawArrays(GL_LINES, 0, app.floorGridVertexCount);
         }
-        */
-       
-        
-        
         if(app.cursorRayDidHit && app.cursorPanelFocus == CURSOR_PANEL_FOCUS_APP_VIEW){
             glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_ID_RAY_HIT]);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_ID_RAY_HIT]);
             app_use_pos_color_32_vertex();
             glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0); 
         }
-
-        if(app.floorGridVertexCount){
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_ID_FLOOR_GRID]);
-            app_use_pos_color_32_vertex();
-            glDrawArrays(GL_LINES, 0, app.floorGridVertexCount);
-        }
-
-        if((app.activeTool == TOOL_ID_SELECTION_TOOL) && 
-            (app.selectionTool.state  != SELECTION_TOOL_STATE_PICK_ORIGIN)){
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_SELECTION_BOX]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_SELECTION_BOX]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-        }
-
-        if(app.activeTool == TOOL_ID_MOVE_TOOL ||
-            (app.activeTool == TOOL_ID_SELECTION_TOOL && app.selectionTool.subTool == TOOL_ID_MOVE_TOOL)){
-        
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_X_MOVE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_X_MOVE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_Y_MOVE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_Y_MOVE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_Z_MOVE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_Z_MOVE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-            
-        }
-        if(app.activeTool == TOOL_ID_BOX_SCALE_TOOL ||
-            (app.activeTool == TOOL_ID_SELECTION_TOOL && app.selectionTool.subTool == TOOL_ID_BOX_SCALE_TOOL)){
-        
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_NX_BOX_SCALE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_NX_BOX_SCALE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-            
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_PX_BOX_SCALE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_PX_BOX_SCALE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-            
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_NY_BOX_SCALE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_NY_BOX_SCALE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-            
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_PY_BOX_SCALE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_PY_BOX_SCALE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_NZ_BOX_SCALE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_NZ_BOX_SCALE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-            
-            glBindBuffer(GL_ARRAY_BUFFER, app.vertexBufferId[VERTEX_BUFFER_PZ_BOX_SCALE_PULLEY]);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.elementBufferId[ELEMENT_BUFFER_PZ_BOX_SCALE_PULLEY]);
-            app_use_pos_color_32_vertex();
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-        }
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glBindBuffer(GL_ARRAY_BUFFER, app.voxelHeadVertexBuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.voxelHeadElementBuffer);
+        app_use_pos_color_32_vertex();
+        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0); 
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-        glUseProgram(app.shaderProgramId[SHADER_PROGRAM_ID_PHONG]);
-        glUniform3f(
-            glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_PHONG],"uDirectionLight"), 
-            app.sceneLightDirection[0], app.sceneLightDirection[1], app.sceneLightDirection[2]
-        );
-        glUniform1f(
-            glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_PHONG],"uAmbientLight"), 
-            0.2
-        );
-        glUniform1f(
-            glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_PHONG],"uLightIntensity"), 
-            1.0
-        );
-        glUniformMatrix4fv(
-            glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_PHONG],"uProjMat"),
-            1, GL_FALSE, (float*)app.projectionMatrix
-        );
-        glUniformMatrix4fv(
-            glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_PHONG],"uViewMat"),
-            1, GL_FALSE, (float*)app.viewMatrix
-        );
-        {
-            mat4x4 idMat;
-            mat4x4_identity(idMat);
-            glUniformMatrix4fv(
-                glGetUniformLocation(app.shaderProgramId[SHADER_PROGRAM_ID_PHONG],"uModelMat"),
-                1, GL_FALSE, (float*)idMat
-            );
-        }
-        
-        if(app.mainVoxels.voxelCount){
-
-            glBindBuffer(GL_ARRAY_BUFFER, app.mainVoxelsModel.vertexBuffer);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.mainVoxelsModel.elementBuffer);
-            glVertexAttribPointer(0, 3,GL_FLOAT,GL_FALSE, 10 * sizeof(float), (void*)0);
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(1, 4,GL_FLOAT,GL_FALSE, 10 * sizeof(float), (void*)(sizeof(float) * 3));
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(2, 3,GL_FLOAT,GL_FALSE, 10 * sizeof(float), (void*)(sizeof(float) * (3 + 4)));
-            glEnableVertexAttribArray(2);
-            glDrawElements(GL_TRIANGLES, app.mainVoxels.voxelCount * 36, GL_UNSIGNED_INT, 0);
-        }
-        
+       
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glUseProgram(0);
         
         
         nk_glfw3_new_frame(&glfw);  
+
+        
         app_nk_gui_main_window(&app, ctx);
         nk_glfw3_render(&glfw, NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
         glfwSwapBuffers(window);
