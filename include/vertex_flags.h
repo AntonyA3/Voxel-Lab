@@ -1,9 +1,0 @@
-#ifndef VERTEX_FLAGS_H
-#define VERTEX_FLAGS_H
-enum vertex_flags{
-    VERTEX_FLAGS_POSITION = 1,
-    VERTEX_FLAGS_COLOR_RGB = 2,
-    VERTEX_FLAGS_COLOR_RGBA = 4,
-    VERTEX_FLAGS_NORMAL = 8
-};
-#endif

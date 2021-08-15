@@ -1,4 +1,0 @@
-#ifndef CAMERA_MODE_H
-#define CAMERA_MODE_H
-enum camera_mode {CAMERA_MODE_ORTHOGRAPHIC, CAMERA_MODE_PERSPECTIVE};
-#endif

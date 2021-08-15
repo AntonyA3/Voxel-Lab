@@ -1,27 +1,30 @@
 #ifndef AABB_H
 #define AABB_H
+#define FLOATS_PER_CUBE 4 * 6 * 3
+#define ELEMENTS_PER_CUBE 36
+#define VERTICIES_PER_CUBE 24
 #include "../include/linmath.h"
-#include "../include/number_functions.h"
-typedef union
-{
+typedef union 
+{   
     struct{
-        float x, y, z, w, h, d;
+        float x, y, z;
+        float width, height, depth;
     };
-    struct{
+    struct 
+    {
         vec3 min;
-        vec3 extents;
+        vec3 size;
     };
+    
 }Aabb;
 
-void aabb_get_centre(Aabb aabb, vec3 centre);
-void aabb_get_max_corner(Aabb aabb, vec3 point);
-void aabb_get_overlaping_area(Aabb aabb1, Aabb aabb2, vec3 overlap);
-void aabb_get_box_corners(Aabb aabb, vec3 corners[8]);
-void aabb_get_corner(Aabb aabb, int corner, vec3 result);
-int aabb_contains_point(Aabb aabb, float x, float y, float z);
-int aabb_contains_point_inclusive(Aabb aabb, float x, float y, float z);
-int aabb_contains_aabb(Aabb aabbContainer, Aabb aabb);
+extern float AABB_VERTEX_ARRAY[FLOATS_PER_CUBE];
+extern float AABB_NORMAL_ARRAY[FLOATS_PER_CUBE];
+extern unsigned int AABB_ELEMENTS_ARRAY[ELEMENTS_PER_CUBE];
 
-Aabb aabb_get_box_with_subtracted_corners(Aabb aabb, float subtraction);
-Aabb aabb_from_origin_halfExtents(vec3 origin, vec3 halfExtents);
+int aabb_contains_point(Aabb aabb, float x, float y, float z);
+int aabb_intersects_aabb(Aabb aabb1, Aabb aabb2);
+Aabb aabb_from_expand(Aabb aabb, float expansion);
+void aabb_get_corners(Aabb aabb, vec3 corners[8]);
+void aabb_get_origin(Aabb aabb, vec3 origin);
 #endif

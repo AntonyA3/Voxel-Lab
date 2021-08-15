@@ -31,6 +31,12 @@
         "box_scale_tool.h": "c",
         "shape.h": "c",
         "voxel_tree.h": "c",
-        "linmath.h": "c"
+        "linmath.h": "c",
+        "color_rgba_f.h": "c",
+        "frame.h": "c",
+        "model.h": "c",
+        "vertex.h": "c",
+        "glew.h": "c",
+        "math.h": "c"
     }
 }

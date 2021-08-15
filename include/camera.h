@@ -1,17 +1,19 @@
 #ifndef CAMERA_H
 #define CAMERA_H
-#include "../include/linmath.h"
-#include "../include/camera_mode.h"
+#include "../linmath/linmath.h"
 
-typedef struct Camera{
-    int cameraMode;
-    float dWidth, dHeight;
-    float yaw, pitch, distance,
-    fov, near, far, aspectRatio;
-    vec3 offset;
+enum camera_projection{CAMERA_ORTHOGRAPHIC, CAMERA_PERSPECTIVE};
+
+typedef struct
+{
+    int projection;
+    float yaw, pitch, distance;
+    float aspectRatio, near, far, fov;
+    vec3 offset, position;
+    quat yawQuat, pitchQuat, rollQuat;
+    mat4x4 viewMat, projMat, inverseMat;
 }Camera;
 
-void camera_get_view_matrix(Camera camera, mat4x4 viewMatrix);
-void camera_get_projection_matrix(Camera camera, mat4x4 projectionMatrix);
-void camera_get_position(Camera camera, vec3 position);
+void camera_init(Camera *camera, float yaw, float pitch, 
+    float distance, float near, float far, float fov);
 #endif
