@@ -35,7 +35,7 @@ void model_generate_aabb_vertex_array(float *vertexArray, Aabb aabb, float *colo
         } 
     }
 }
-
+/*
 void model_generate_voxel_model(float *vertexArray, unsigned int *elementsArray, 
     Voxel *voxel, float *color, int vertexFormat, int *n
 ){
@@ -80,7 +80,7 @@ void model_generate_voxel_model(float *vertexArray, unsigned int *elementsArray,
         break;
     }
 }
-
+*/
 
 void model_generate_aabb_element_array(unsigned int *elementsArray, int n){
     memcpy(elementsArray, AABB_ELEMENTS_ARRAY, sizeof(unsigned int) * ELEMENTS_PER_CUBE);
@@ -139,6 +139,7 @@ void model_generate(int modelType, Model* model,
     {
     case MODEL_TYPE_VOXEL_MODEL:
         {
+            /*
             VoxelTree *voxelTree = (VoxelTree*)positionData;
             int n = 0;
             int totalSize = vertex_size(vertexFormat) * sizeof(float) * VERTICIES_PER_CUBE * voxelTree->voxelCount;
@@ -156,6 +157,7 @@ void model_generate(int modelType, Model* model,
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->elementBuffer);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, ELEMENTS_PER_CUBE * sizeof(unsigned int) * voxelTree->voxelCount, model->elementArray, usage);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+            */
         }
         break;
     case MODEL_TYPE_GRID:

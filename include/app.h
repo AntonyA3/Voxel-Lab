@@ -1,39 +1,40 @@
 #ifndef APP_H
 #define APP_H
-#include "../include/gui_window.h"
-#include "../include/frame.h"
-#include "../include/grid.h"
-#include "../include/model.h"
-#include "../include/camera.h"
-#include "../include/cursor.h"
-#include "../include/voxel_tree.h"
-#include "../include/voxel_editor.h"
-#include "../include/scene.h"
-#define MODEL_COUNT 5
+#include <stdio.h>
+#include <stdlib.h>
+#include "../include/frame_buffer_object.h"
+//#include "../include/app_event_stack.h"
+#include "../include/world.h"
 
-enum property{PROPERTY_CAMERA, PROPERTY_SCENE};
-enum tool{TOOL_PAINT, TOOL_ERASE};
+#define MODEL_COUNT 5
+#define SHADER_COUNT 2
+
+
+
+enum property{PROPERTY_TOOL, PROPERTY_CAMERA, PROPERTY_SCENE};
+//enum property_catagory{EDITOR_PROPERTY, TOOL_PROPERTY};
+enum panel_focus{PANEL_FOCUS_APP, PANEL_FOCUS_GUI};
+
 typedef struct
 {
-    GuiWindow guiWindow;
-    Frame frame;
-    Grid floorGrid;
-    VoxelTree mainVoxels;
-    Scene scene;
-    union 
-    {   struct{
-            Model floorGridModel, testTriangle, hitModel, voxelBox, voxelModel;
-        };
-        Model models[MODEL_COUNT];
-    };
-    Camera camera;
-    Cursor cursor;
-
-    VoxelEditor voxelEditor;
+    FrameBufferObject appViewFrame;
+    //AppEventStack appEventStack;
+    World world;
+    int panelFocused;
     int isCameraRotate;
     int toolSelected;
     int propertySelected;
-    
-    GLuint flatShader, phongShader;
+    int propertyCatagory;
+    union
+    {
+        struct 
+        {
+            GLuint flatShader, phongShader;
+        };
+        GLuint *shaders[SHADER_COUNT]
+    };
 }App;
+
+void file_get_text(const char *path, char **text);
+GLuint shader_generate(const char *vertexShaderPath, const char *fragmentShaderPath);
 #endif

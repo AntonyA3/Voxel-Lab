@@ -3,10 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <GL/glew.h>
-#include "../include/aabb.h"
+#include "../include/shape.h"
 #include "../include/grid.h"
-#include "../include/voxel_tree.h"
-#include "../include/voxel.h"
+#include "../include/voxel_octree.h"
 #include "../include/vertex.h"
 
 enum model_type{MODEL_TYPE_GRID, MODEL_TYPE_VOXEL_MODEL, MODEL_TYPE_AABB, MODEL_TYPE_TEST_TRI};

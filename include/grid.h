@@ -9,4 +9,8 @@ typedef struct
     int hCount;
     int vCount;
 }Grid;
+
+
+void grid_init(Grid *grid, vec3 min, vec3 vecH, vec3 vecV, int hCount, int vCount);
+
 #endif

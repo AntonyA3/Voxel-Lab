@@ -4,6 +4,7 @@ void ray_point_at_distance(Ray ray, float distance, vec3 point){
     vec3_scale(point, ray.direction, distance);
     vec3_add(point, point, ray.origin);
 }
+
 int ray_vs_aabb(Ray ray, Aabb aabb, float *distance, int *side){
     float x0 = aabb.x;
     float x1 = aabb.x + aabb.width;
@@ -94,8 +95,7 @@ int ray_vs_aabb(Ray ray, Aabb aabb, float *distance, int *side){
     return hit;
 }
 
-int ray_vs_voxel_tree(Ray ray, VoxelTree *voxelTree, float *distance, int *side){
-    
+int ray_vs_voxel_octree(Ray ray, VoxelOctreeTree *voxelTree, float *distance, int *side){
     if(voxelTree->head != NULL){
         return ray_vs_voxel(ray, voxelTree->head, distance, side);
     }
@@ -103,11 +103,11 @@ int ray_vs_voxel_tree(Ray ray, VoxelTree *voxelTree, float *distance, int *side)
 }
 
 int ray_vs_voxel(Ray ray, Voxel *voxel, float *distance, int *side){
-    Aabb voxBox = voxel_to_aabb(*voxel);
+    Aabb voxBox = voxel_to_aabb(voxel);
     switch (voxel->size)
     {
     case 1:
-        return ray_vs_aabb(ray, voxel_to_aabb(*voxel), distance, side);
+        return ray_vs_aabb(ray, voxel_to_aabb(voxel), distance, side);
         break;
     default:
         {
@@ -115,7 +115,6 @@ int ray_vs_voxel(Ray ray, Voxel *voxel, float *distance, int *side){
             int voxSide;
             int hit = ray_vs_aabb(ray, voxBox, &voxDistance, &voxSide);
             int contains = aabb_contains_point(voxBox, ray.x, ray.y, ray.z);
-            printf("voxel at size %d hit is %d \n", voxel->size, hit);
             
             if(hit || contains){
                 switch (voxel_is_leaf(voxel))
@@ -129,7 +128,7 @@ int ray_vs_voxel(Ray ray, Voxel *voxel, float *distance, int *side){
                 default:   
                     {                  
                         int hit = 0;
-                        for(int i = 0; i < VOXEL_CHILD_COUNT; i++){
+                        for(int i = 0; i < 8; i++){
                             if(voxel->child[i] != NULL){
                                 int localHit = ray_vs_voxel(ray, voxel->child[i], distance, side);
                                 hit = localHit || hit;
@@ -159,3 +158,20 @@ int ray_vs_y0(Ray ray, float *distance, int *side){
     }
     return 0;
 }
+
+/*
+void ray_from_camera(Ray *ray, Camera camera, Cursor cursor){
+    memcpy(ray->origin, camera.position, sizeof(vec3));
+
+    mat4x4 projView;
+    mat4x4_mul(projView, camera.projMat, camera.viewMat);
+    mat4x4_invert(camera.inverseMat, projView);
+    
+    vec4 clipV = {cursor.clipX, -cursor.clipY, -1.0, 1.0};
+    vec4 targetV;
+    mat4x4_mul_vec4(targetV, camera.inverseMat, clipV);
+    vec3 dirV;
+    vec3_sub(dirV, targetV, cursor.ray.origin);
+    vec3_norm(cursor.ray.direction, dirV);
+    
+}*/

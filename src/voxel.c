@@ -1,5 +1,5 @@
 #include "../include/voxel.h"
-
+/*
 int voxel_i_is_left(int i){
     return (i == 0) || (i == 1) || (i == 4) || (i == 5);
 }
@@ -29,25 +29,26 @@ Aabb voxel_child_to_aabb(Voxel voxel, int childId){
     aabb.z -= isFront * hs;
     return aabb; 
 }
+
 Aabb voxel_to_aabb(Voxel voxel){
     switch (voxel.size)
     {
     case 1:
         {
-            Aabb aabb = {
+            Aabb aabb = {{
                 voxel.origin[0], voxel.origin[1], 
                 voxel.origin[2],1 ,1 ,1
-            };
+            }};
             return aabb;
         }
         break;  
     default:
         {
             float hs = voxel.size / 2;
-            Aabb aabb = {
+            Aabb aabb = {{
                 voxel.origin[0] - hs, voxel.origin[1] - hs, voxel.origin[2] - hs,
                 voxel.size, voxel.size, voxel.size
-            };
+            }};
             return aabb;
         }
         break;
@@ -68,6 +69,7 @@ int voxel_is_leaf(Voxel *voxel){
     }
 }
 int voxel_count(Voxel *voxel){
+
     switch (voxel->size)
     {
     case 1:
@@ -106,7 +108,8 @@ void voxel_split(Voxel *voxel){
         voxel_init_children_to_null(voxel->child[i]);
     }
 }
-void voxel_edit_voxel_df(Voxel **voxel, int shape, void *shapeData, int action){
+void voxel_edit_voxel_df(Voxel **voxel, int shape, void *shapeData, int action, int *changed){
+
     switch ((*voxel)->size)
     {
     case 2:
@@ -121,6 +124,7 @@ void voxel_edit_voxel_df(Voxel **voxel, int shape, void *shapeData, int action){
                 {
                 case VOXEL_ACTION_ADD:
                     if((*voxel)->child[i] == NULL){
+                        *changed = 1;
                         (*voxel)->child[i] = (Voxel*) malloc(sizeof(Voxel));
                         (*voxel)->child[i]->size = (*voxel)->size / 2;
                         (*voxel)->child[i]->origin[0] = childBox.x;
@@ -132,11 +136,9 @@ void voxel_edit_voxel_df(Voxel **voxel, int shape, void *shapeData, int action){
                 
                 case VOXEL_ACTION_DELETE:
                     if((*voxel)->child[i] != NULL){
+                        *changed = 1;
                         free((*voxel)->child[i]);
                         (*voxel)->child[i] = NULL;
-                    }
-                    if(voxel_is_leaf(*voxel)){
-                        *voxel = NULL;
                     }
                     break;
                 }
@@ -144,11 +146,18 @@ void voxel_edit_voxel_df(Voxel **voxel, int shape, void *shapeData, int action){
         }
         break;
     default:
+        if(action == VOXEL_ACTION_DELETE){
+            if(voxel_is_leaf(*voxel)){
+                voxel_split(*voxel);
+            }
+        }
         for(int i = 0; i < VOXEL_CHILD_COUNT; i++){
             vec3 midpoint;
             Aabb voxBox = voxel_child_to_aabb(**voxel, i);
             Aabb predBox = aabb_from_expand(voxBox, -0.5);
             aabb_get_origin(voxBox, midpoint);
+            
+
             if(shape_intersects_aabb(shape, shapeData, predBox)){
                 switch (action)
                 {
@@ -161,15 +170,12 @@ void voxel_edit_voxel_df(Voxel **voxel, int shape, void *shapeData, int action){
                         (*voxel)->child[i]->origin[2] = midpoint[2];
                         voxel_init_children_to_null((*voxel)->child[i]);
                     }
-                    voxel_edit_voxel_df(&(*voxel)->child[i], shape, shapeData, VOXEL_ACTION_ADD);
+                    voxel_edit_voxel_df(&(*voxel)->child[i], shape, shapeData, VOXEL_ACTION_ADD, changed);
                     break;
                 
                 case VOXEL_ACTION_DELETE:
                     if((*voxel)->child[i] != NULL){
-                        if(voxel_is_leaf(*voxel)){
-                            voxel_split(*voxel);
-                        }
-                        voxel_edit_voxel_df(&(*voxel)->child[i], shape, shapeData, VOXEL_ACTION_DELETE);
+                        voxel_edit_voxel_df(&(*voxel)->child[i], shape, shapeData, VOXEL_ACTION_DELETE, changed); 
                     }
                     break;
                 }
@@ -178,4 +184,5 @@ void voxel_edit_voxel_df(Voxel **voxel, int shape, void *shapeData, int action){
         break;
     }
 }
+*/
 

@@ -1,9 +1,10 @@
 #ifndef RAY_H
 #define RAY_H
 #include "../linmath/linmath.h"
-#include "../include/aabb.h"
-#include "../include/voxel_tree.h"
+#include "../include/voxel_octree.h"
 #include "../include/voxel.h"
+#include "../include/camera.h"
+
 enum ray_hit_side{
     RAY_HIT_SIDE_LEFT,
     RAY_HIT_SIDE_RIGHT,
@@ -29,13 +30,13 @@ typedef union
     struct
     {
         vec3 origin;
-        vec3 direction
+        vec3 direction;
     };
-    
 }Ray;
 
 int ray_vs_aabb(Ray ray, Aabb aabb, float *distance, int *side);
 int ray_vs_y0(Ray ray, float *distance, int *side);
-int ray_vs_voxel_tree(Ray ray, VoxelTree *voxelTree, float *distance, int *side);
+int ray_vs_voxel_octree(Ray ray, VoxelOctreeTree *voxelTree, float *distance, int *side);
 int ray_vs_voxel(Ray ray, Voxel *voxel, float *distance, int *side);
+//void ray_from_camera(Ray *ray, Camera camera, Cursor cursor);
 #endif

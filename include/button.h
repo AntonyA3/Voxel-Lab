@@ -13,4 +13,5 @@ typedef struct
     int state;
 }Button;
 
+int button_get_next_state(int state, int isDown);
 #endif

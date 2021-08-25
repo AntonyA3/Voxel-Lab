@@ -11,9 +11,10 @@ out vec4 color;
 void main(){
 
     float diffuse = dot(uDirectionLight, fnormal);  
+    
     //vec4 ambientColor = vec4(fcolor.xyz * uAmbientLight, 1.0);
     //vec4 diffuseColor = fcolor * diffuse * uLightIntensity;
 
-    vec4 finalColor = diffuse * fcolor;//max(diffuseColor, ambientColor);
+    vec4 finalColor = diffuse * fcolor;
     color = finalColor;
 }

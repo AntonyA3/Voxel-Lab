@@ -1,6 +1,13 @@
-#include "../include/frame.h"
+#include "../include/frame_buffer_object.h"
 
-void frame_update(Frame *frame, int width, int height){
+
+void frame_buffer_object_init(FrameBufferObject *frameBufferObject){
+    glGenFramebuffers(1, &frameBufferObject->buffer);
+    glGenTextures(1, &frameBufferObject->colorTexture);
+    glGenTextures(1, &frameBufferObject->depthStencilTexture);
+}
+
+void frame_buffer_object_update(FrameBufferObject *frame, int width, int height){
     glBindFramebuffer(GL_FRAMEBUFFER, frame->buffer);
     glBindTexture(GL_TEXTURE_2D, frame->colorTexture);
 
