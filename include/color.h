@@ -18,7 +18,17 @@ typedef union
     {
         unsigned char r, g, b, a;
     };
-    unsigned char color[4];
+    struct 
+    {
+        unsigned char color[4];
+
+    };
+    struct 
+    {
+        unsigned int colorI;
+    };
+    
+    
 }ColorRGBA;
 
 ColorRGBAF colorRgba_to_colorRgbaf(ColorRGBA colorIn);

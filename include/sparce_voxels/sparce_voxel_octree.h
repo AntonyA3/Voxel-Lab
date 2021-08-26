@@ -1,20 +1,31 @@
 #ifndef SPARCE_VOXEL_OCTREE_H
 #define SPARCE_VOXEL_OCTREE_H
-#include "../include/shape.h"
-#include "../include/color.h"
-#include "../include/stack.h"
+#include "../../include/shape.h"
+#include "../../include/color.h"
+#include "../../include/stack.h"
 enum sparce_voxel_flags{SPARCE_VOXEL_LARGE, SPARCE_VOXEL_16X16X16,
     SPARCE_VOXEL_16X16X16_COMPRESSED
 };
+enum color_datat_flags{COLOR_DATA_ARRAY, COLOR_DATA_RFL};
 enum voxel_edit_action{VOXEL_ADD, VOXEL_DELETE};
 
+
+typedef struct ColorData
+{
+    int type;
+}ColorData;
+
+typedef struct ColorArray
+{
+    int type;
+    ColorRGBA colorData[16][16][16];
+}ColorArray;
 
 
 typedef struct
 {
     int colorCount;
-    unsigned char color[4]
-    
+    ColorRGBA color;
 }ColorEncoding;
 
 typedef struct ColorEncodingNode
@@ -24,13 +35,11 @@ typedef struct ColorEncodingNode
 
 }ColorEncodingNode;
 
-typedef struct SparceVoxel16x16x16Compressed
+typedef struct ColorRLE
 {
-    int type;
-    int min[3];
-    ColorEncodingNode* rleHead;
+    ColorEncodingNode *head;
+}ColorRLE;
 
-}SparceVoxel16x16x16Compressed;
 
 typedef struct SparceVoxel
 {
@@ -49,7 +58,7 @@ typedef struct
 {
     int type;
     int min[3];
-    unsigned char colorData[16][16][16][4];
+    ColorData *colorData;
 }SparceVoxel16x16x16;
 
 typedef struct
@@ -69,12 +78,10 @@ int sparce_voxel_index_is_left(int index);
 int sparce_voxel_index_is_bottom(int index);
 int sparce_voxel_index_is_front(int index);
 
-SparceVoxel16x16x16Compressed* sparce_voxel_16x16x16_compress(SparceVoxel16x16x16 *sparceVoxel);
-SparceVoxel16x16x16* sparce_voxel_16x16x16_decompress(SparceVoxel16x16x16Compressed *sparceVoxel);
-
 Aabb voxel_large_get_aabb(SparceVoxelLarge *voxelLarge);
 Aabb voxel_large_get_child_aabb(SparceVoxelLarge *voxel, int childId);
 
+void printColorRFE(ColorEncodingNode *node);
 void sparce_voxel_edit_large(SparceVoxelLarge **voxel, SparceVoxelOctreeEditor *editor);
 void sparce_voxel_large_edit_size_32(SparceVoxelLarge **voxel,SparceVoxelOctreeEditor *editor);
 void sparce_voxel_large_edit_default(SparceVoxelLarge **voxel, SparceVoxelOctreeEditor *editor);

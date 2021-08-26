@@ -4,7 +4,7 @@
 #include "../include/shape.h"
 #include "../include/model.h"
 #include "../include/color.h"
-#include "../include/sparce_voxel_octree.h"
+#include "../include/sparce_voxels/sparce_voxel_octree.h"
 #include "../include/voxel_octree.h"
 #include "../include/stack.h"
 enum graphical_debug_item{DEBUG_AABB};

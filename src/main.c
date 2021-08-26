@@ -39,7 +39,7 @@
 #include "../include/mouse.h"
 #include "../include/ray.h"
 #include "../include/color.h"
-#include "../include/sparce_voxel_octree.h"
+#include "../include/sparce_voxels/sparce_voxel_octree.h"
 #include "../include/voxel_octree.h"
 #include "../include/graphical_debugger.h"
 #include "../include/stack.h"

@@ -1,4 +1,4 @@
-#include "../include/sparce_voxel_octree.h"
+#include "../include/sparce_voxels/sparce_voxel_octree.h"
 
 
 int sparce_voxel_index_is_left(int index){
@@ -11,46 +11,6 @@ int sparce_voxel_index_is_bottom(int index){
 
 int sparce_voxel_index_is_front(int index){
     return (index == 0) || (index == 1) || (index == 2) || (index == 3);
-}
-
-SparceVoxel16x16x16Compressed* sparce_voxel_16x16x16_compress(SparceVoxel16x16x16 *sparceVoxel){
-  
-    SparceVoxel16x16x16Compressed *encodedVoxel = (SparceVoxel16x16x16Compressed*) malloc(sizeof(SparceVoxel16x16x16Compressed));
-    
-    memcpy(encodedVoxel->min, sparceVoxel->min, sizeof(int) * 3);
-    encodedVoxel->type = SPARCE_VOXEL_16X16X16_COMPRESSED;
-    encodedVoxel->rleHead = NULL;
-    unsigned int *colorData = &sparceVoxel->colorData[0][0][0][0];
-
-    //Set First Color;
-    encodedVoxel->rleHead = (ColorEncodingNode*) malloc(sizeof(ColorEncodingNode));
-    memcpy(
-        encodedVoxel->rleHead->encoding.color,
-        &colorData[0],
-        sizeof(ColorRGBA)
-    );
-    
-    encodedVoxel->rleHead->encoding.colorCount = 1;
-    encodedVoxel->rleHead->nextColor = NULL;
-
-    for(int i = 1; i < 16 * 16 * 16; i++){
-        unsigned int colorInt = colorData[i];
-        if(colorData[i] == colorInt){
-            encodedVoxel->rleHead->encoding.colorCount == 1;
-        }else{
-            ColorEncodingNode *newColor = (ColorEncodingNode*) malloc(sizeof(ColorEncodingNode));
-            newColor->nextColor = NULL;
-            newColor->encoding.colorCount = 1;
-            memcpy(&newColor->encoding.color, &colorInt, sizeof(unsigned int));
-            newColor->nextColor = encodedVoxel->rleHead;
-            encodedVoxel->rleHead = newColor;
-        }
-    }
-    return encodedVoxel;
-}
-
-SparceVoxel16x16x16* sparce_voxel_16x16x16_decompress(SparceVoxel16x16x16Compressed *sparceVoxel){
-
 }
 
 Aabb voxel_large_get_child_aabb(SparceVoxelLarge *voxel, int childId){
@@ -68,7 +28,23 @@ Aabb voxel_large_get_child_aabb(SparceVoxelLarge *voxel, int childId){
 
     return aabb;
 }
-
+void printColorRFE(ColorEncodingNode *node){
+    int i = 0;
+    printf("show color list\n");
+    while (node != NULL)
+    {
+        printf("%d: {n: %d, color: {%u, %u, %u, %u}}\n",
+            i, node->encoding.colorCount, 
+            (unsigned int)node->encoding.color.r,
+            (unsigned int)node->encoding.color.g,
+            (unsigned int)node->encoding.color.b,
+            (unsigned int)node->encoding.color.a
+        );
+        i++;
+        node = node->nextColor;
+    }
+    printf("\n");
+}
 void sparce_voxel_large_edit_size_32(SparceVoxelLarge **voxel,SparceVoxelOctreeEditor *editor){
     printf("edit voxel of size 32 \n");
 
@@ -83,14 +59,19 @@ void sparce_voxel_large_edit_size_32(SparceVoxelLarge **voxel,SparceVoxelOctreeE
                 (*voxel)->child[i] = (SparceVoxel16x16x16*) malloc(sizeof(SparceVoxel16x16x16));
                 SparceVoxel16x16x16* child = (*voxel)->child[i];
                 child->type = SPARCE_VOXEL_16X16X16;
-                for(int x = 0; x < 16; x++){
-                    for(int y = 0; y < 16; y++){
-                        for(int z = 0; z < 16; z++){
-                            int* p = &child->colorData[x][y][z];
-                            *p = 0;   
-                        }
-                    }
+                //Init Color RFL
+                child->colorData = (ColorRLE*) malloc(sizeof(ColorRLE));
+                child->colorData->type = COLOR_DATA_RFL;
+                ((ColorRLE*)child->colorData)->head = (ColorEncodingNode*) malloc(sizeof(ColorEncodingNode));
+                ((ColorRLE*)child->colorData)->head->encoding.colorCount = 16 * 16 * 16;
+                {
+                    ColorRGBA noColor = {0,0,0,0};
+                    colorRgba_copy(
+                        &((ColorRLE*)child->colorData)->head->encoding.color,
+                        noColor
+                    );
                 }
+                ((ColorRLE*)child->colorData)->head->nextColor = NULL;
                 child->min[0] = (int)voxBox.x;
                 child->min[1] = (int)voxBox.y;
                 child->min[2] = (int)voxBox.z;
@@ -145,20 +126,25 @@ void sparce_voxel_edit_large(SparceVoxelLarge **voxel, SparceVoxelOctreeEditor *
 
 void sparce_voxel_edit_16x16x16(SparceVoxel16x16x16 **voxel, SparceVoxelOctreeEditor *editor){
     printf("edit 16x16x16\n");
-    
-    //Decode this Voxel;
-    SparceVoxel16x16x16 *editingVoxel = sparce_voxel_16x16x16_decompress(*voxel);
-    if((*voxel)->type == SPARCE_VOXEL_16X16X16_COMPRESSED){
+    printf("Expand voxels Array\n");
 
-        //Free the Run Lenght Encoded Voxels
-        free(*voxel);
-        *voxel = NULL;
+    //Decode this Voxel;
+    ColorRGBA colorArray[16][16][16];
+    ColorRGBA *colorArrayFlat = &colorArray[0][0][0];
+
+    {
+        ColorEncodingNode *currentColor = ((ColorRLE*)(*voxel)->colorData)->head;
+        for(int i = 0; i < 16 * 16 * 16; i++){
+            colorArrayFlat[i].colorI = currentColor->encoding.color.colorI;
+            currentColor->encoding.colorCount -= 1;
+            if(currentColor->encoding.colorCount == 0){
+                currentColor = currentColor->nextColor;
+            }
+        }
     }
 
-    
-    //Add Voxels Based on Shape
+    printf("Edit voxels Array\n");
     Aabb shapeBox = shape_to_aabb(editor->shapeType, editor->shapeData);
-
     int xOffset = (*voxel)->min[0];
     int yOffset = (*voxel)->min[1];
     int zOffset = (*voxel)->min[2];
@@ -176,19 +162,49 @@ void sparce_voxel_edit_16x16x16(SparceVoxel16x16x16 **voxel, SparceVoxelOctreeEd
             for(int z = fmaxf(minZ, 0); z < fminf(maxZ, 16); z++){
                 if(shape_contains_point(editor->shapeType, editor->shapeData, 
                     x + 0.5 + xOffset, y + 0.5 + yOffset, z + 0.5 + zOffset)){     
-                    
-                    colorRgba_copy((*voxel)->colorData[x][y][z], editor->brushColor);    
+                    colorRgba_copy(&colorArray[x][y][z], editor->brushColor); 
                 }
             }
         }
     }
-    //Encode this Voxel
 
-    /*
+    printf("Re compress voxels Array\n");
+
+    //Encode this Voxel
+    {
+       ColorEncodingNode **currentColor = &(((ColorRLE*)(*voxel)->colorData)->head);
+       while (*currentColor != NULL)
+       {
+            ColorEncodingNode *nextColor = (*currentColor)->nextColor;
+            free(*currentColor);
+            *currentColor = NULL;
+            currentColor = &nextColor;
+       }
+    }
+
+    {
+        ((ColorRLE*)(*voxel)->colorData)->head = (ColorEncodingNode*) malloc(sizeof(ColorEncodingNode*));
+        ColorEncodingNode **currentColor = &(((ColorRLE*)(*voxel)->colorData)->head);
+        
+        (*currentColor)->encoding.colorCount = 1;
+        (*currentColor)->encoding.color.colorI = colorArrayFlat[0].colorI;
+        (*currentColor)->nextColor = NULL;
+        for(int i = 1; i < 16 * 16 * 16; i++){
+            if((*currentColor) != NULL){
+                if((*currentColor)->encoding.color.colorI != colorArrayFlat[i].colorI){
+                    (*currentColor)->nextColor = (ColorEncodingNode*) malloc(sizeof(ColorEncodingNode*));
+                    currentColor = &(*currentColor)->nextColor;
+                    (*currentColor)->encoding.colorCount = 0;
+                    (*currentColor)->encoding.color.colorI = colorArrayFlat[i].colorI;
+                    (*currentColor)->nextColor = NULL;
+                }
+                (*currentColor)->encoding.colorCount += 1;   
+            }       
+        }
+        printColorRFE(((ColorRLE*)(*voxel)->colorData)->head);    
+    }
+
     //Free the Voxel Array
-    free(editingVoxel);
-    editingVoxel = NULL;
-    */
 }
 
 void sparce_voxel_edit(SparceVoxel **voxel, SparceVoxelOctreeEditor *editor){

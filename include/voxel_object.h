@@ -2,8 +2,7 @@
 #define VOXEL_OBJECT_H
 #include <stdlib.h>
 #include "../include/voxel_octree.h"
-#include "../include/sparce_voxel_octree.h"
-
+#include "../include/sparce_voxels/sparce_voxel_octree.h"
 /*
 typedef struct
 {

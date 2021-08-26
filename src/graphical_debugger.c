@@ -70,23 +70,43 @@ void graphical_debugger_push_sparce_voxel(GraphicalDebugger *graphicalDebugger, 
                 Aabb aabb = {vox->min[0], vox->min[1], vox->min[2], 16,16,16};
                 //graphical_debugger_push_aabb(graphicalDebugger, aabb, color);
             }
+            
+            ColorRGBA colorArray[16][16][16];
+            ColorRGBA *colorArrayFlat = &colorArray[0][0][0];
+            {
+                int count = 0;
+                ColorEncodingNode **currentColor = &((ColorRLE*)(vox)->colorData)->head;
+                count = (*currentColor)->encoding.colorCount;
+
+                for(int i = 0; i < 16 * 16 * 16; i++){
+                    if((*currentColor) != NULL){
+                        colorArrayFlat[i].colorI = (*currentColor)->encoding.color.colorI;
+                        count -= 1;
+
+                        if(count == 0){
+
+                            if((*currentColor)->nextColor != NULL){
+                                currentColor = &(*currentColor)->nextColor;
+                                count = (*currentColor)->encoding.colorCount;
+                            }
+
+                        }
+                    }
+                    
+                }
+            }
+
             for(int x = 0; x < 16; x++){
                 for(int y = 0; y < 16; y++){
                     for(int z = 0; z < 16; z++){
-                        if(vox->colorData[x][y][z][3] != 0){
-                            ColorRGBAF col = colorRgba_to_colorRgbaf(
-                                *((ColorRGBA*)vox->colorData[x][y][z])
-                            );
-                            
-                            Aabb aabb = {x + vox->min[0], y + vox->min[1], z + vox->min[2], 
-                                1, 1, 1
-                            };
+                        if(colorArray[x][y][z].a != 0){
+                            ColorRGBAF col = colorRgba_to_colorRgbaf(colorArray[x][y][z]);
+                            Aabb aabb = {x + vox->min[0], y + vox->min[1], z + vox->min[2], 1, 1, 1};
                             graphical_debugger_push_aabb(graphicalDebugger, aabb, col);
-      
                         }
                     }
-                }
-            }
+                }   
+            }   
         }
         break;
     }
