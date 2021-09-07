@@ -1,3 +1,4 @@
+/*
 #ifndef SHAPE_H
 #define SHAPE_H
 #include "../include/linmath.h"
@@ -5,10 +6,13 @@
 #define FLOATS_PER_CUBE 4 * 6 * 3
 #define ELEMENTS_PER_CUBE 36
 #define VERTICIES_PER_CUBE 24
-
+*/
+/*
 extern float AABB_VERTEX_ARRAY[FLOATS_PER_CUBE];
 extern float AABB_NORMAL_ARRAY[FLOATS_PER_CUBE];
 extern unsigned int AABB_ELEMENTS_ARRAY[ELEMENTS_PER_CUBE];
+*/
+/*
 enum shape{SHAPE_AABB, SHAPE_SPHERE};
 
 typedef struct{
@@ -67,3 +71,4 @@ Aabb sphere_to_aabb(Sphere sphere);
 int ovoid_contains_point(Ovoid ovoid, float x, float y, float z);
 int ovoid_intersects_aabb(Ovoid ovoid, Aabb aabb);
 #endif
+*/

@@ -1,5 +1,5 @@
 #include "../include/shape.h"
-
+/*
 float AABB_VERTEX_ARRAY[FLOATS_PER_CUBE] = {
     //left
     -1.0f, -1.0f, 1.0f,
@@ -65,6 +65,7 @@ float AABB_NORMAL_ARRAY[FLOATS_PER_CUBE] = {
     0.0f, 0.0f, 1.0f,
     0.0f, 0.0f, 1.0f
 };
+*/
 
 unsigned AABB_ELEMENTS_ARRAY[ELEMENTS_PER_CUBE] = {
     0, 1, 2,        0, 2, 3,

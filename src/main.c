@@ -41,7 +41,6 @@
 #include "../include/color.h"
 #include "../include/sparce_voxels/sparce_voxel_octree.h"
 #include "../include/voxel_octree.h"
-#include "../include/graphical_debugger.h"
 #include "../include/stack.h"
 
 
@@ -536,6 +535,8 @@ int main(int argc, char const *argv[]){
                         graphical_debugger_push_aabb(graphicalDebugger, aabb, yellow);
                     }
                 }
+
+                
                 
                 //Debug Voxels
                 #define DEBUG_VOXEL
